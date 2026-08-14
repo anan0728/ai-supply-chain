@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI供应链决策中枢 · 作品集</title>
+  <!-- ECharts CDN，用于绘制产品架构图 -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <style>
+    /* ========== CSS 变量与全局样式 ========== */
+    :root {
+      --primary: #1a56db;
+      --primary-light: #3b82f6;
+      --primary-dark: #1e3a8a;
+      --bg: #f0f4f8;
+      --card-bg: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --border: #e2e8f0;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+      --radius: 12px;
+      --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                   "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { text-decoration: none; color: inherit; }
+
+    /* ========== 顶部导航栏 ========== */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      padding: 0 40px;
+      background: var(--primary-dark);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .navbar .brand {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .navbar .nav-links {
+      display: flex;
+      gap: 28px;
+      font-size: 14px;
+    }
+    .navbar .nav-links a {
+      color: rgba(255,255,255,0.85);
+      transition: color var(--transition);
+      cursor: pointer;
+    }
+    .navbar .nav-links a:hover {
+      color: #fff;
+    }
+
+    /* ========== Hero 区域 ========== */
+    .hero {
+      text-align: center;
+      padding: 80px 20px 60px;
+      background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%);
+      color: #fff;
+    }
+    .hero h1 {
+      font-size: 42px;
+      font-weight: 800;
+      margin-bottom: 16px;
+      letter-spacing: 1px;
+    }
+    .hero .subtitle {
+      font-size: 18px;
+      font-weight: 400;
+      opacity: 0.9;
+      margin-bottom: 20px;
+    }
+    .hero .scenes {
+      display: inline-flex;
+      gap: 16px;
+      font-size: 14px;
+      opacity: 0.75;
+      padding: 8px 24px;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 24px;
+    }
+    .hero .scenes span {
+      white-space: nowrap;
+    }
+
+    /* ========== 模块卡片区域 ========== */
+    .section {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 60px 20px;
+    }
+    .section-title {
+      text-align: center;
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 40px;
+      position: relative;
+    }
+    .section-title::after {
+      content: '';
+      display: block;
+      width: 48px;
+      height: 3px;
+      background: var(--primary);
+      margin: 12px auto 0;
+      border-radius: 2px;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+    }
+
+    /* 卡片 */
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 32px 24px 28px;
+      text-align: center;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border);
+      transition: transform var(--transition), box-shadow var(--transition);
+      cursor: default;
+    }
+    .card:hover {
+      transform: translateY(-6px);
+      box-shadow: var(--shadow-lg);
+    }
+    .card .card-icon {
+      font-size: 44px;
+      margin-bottom: 16px;
+      line-height: 1;
+    }
+    .card .card-name {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .card .card-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    .card .btn-enter {
+      display: inline-block;
+      padding: 10px 28px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      background: var(--primary);
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+    .card .btn-enter:hover {
+      background: var(--primary-dark);
+    }
+
+    /* ========== 架构图区域 ========== */
+    #architecture {
+      scroll-margin-top: 80px;
+    }
+    .arch-container {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-md);
+      padding: 40px 20px 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    #archChart {
+      width: 100%;
+      height: 420px;
+    }
+
+    /* ========== 关于作品集 ========== */
+    #about {
+      scroll-margin-top: 80px;
+    }
+    .about-content {
+      max-width: 700px;
+      margin: 0 auto;
+      text-align: center;
+      font-size: 15px;
+      color: var(--text-secondary);
+      line-height: 1.8;
+    }
+
+    /* ========== 页脚 ========== */
+    .footer {
+      text-align: center;
+      padding: 28px 20px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      border-top: 1px solid var(--border);
+      background: var(--card-bg);
+    }
+
+    /* ========== 响应式 ========== */
+    @media (max-width: 900px) {
+      .cards-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .hero h1 { font-size: 30px; }
+      .hero .subtitle { font-size: 15px; }
+      .hero .scenes { font-size: 12px; gap: 10px; }
+      .navbar { padding: 0 20px; }
+    }
+    @media (max-width: 560px) {
+      .cards-grid {
+        grid-template-columns: 1fr;
+      }
+      .hero h1 { font-size: 24px; }
+      .navbar .brand { font-size: 15px; }
+      .navbar .nav-links { gap: 14px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== 顶部导航栏 ==================== -->
+  <nav class="navbar">
+    <div class="brand">AI供应链决策中枢</div>
+    <div class="nav-links">
+      <a onclick="scrollToArch()">产品架构</a>
+      <a onclick="scrollToAbout()">关于作品集</a>
+    </div>
+  </nav>
+
+  <!-- ==================== Hero 区域 ==================== -->
+  <section class="hero">
+    <h1>AI供应链决策中枢</h1>
+    <p class="subtitle">面向制造业与物流企业的 AI 决策平台</p>
+    <div class="scenes">
+      <span>需求预测</span>
+      <span>·</span>
+      <span>智能风控</span>
+      <span>·</span>
+      <span>物流优化</span>
+      <span>·</span>
+      <span>全局控制塔</span>
+    </div>
+  </section>
+
+  <!-- ==================== 模块入口卡片 ==================== -->
+  <section class="section">
+    <h2 class="section-title">核心功能模块</h2>
+    <div class="cards-grid">
+
+      <!-- 卡片1：智能需求预测与动态补货 -->
+      <div class="card">
+        <div class="card-icon">📈</div>
+        <div class="card-name">智能需求预测与动态补货</div>
+        <div class="card-desc">基于历史销售数据，AI 预测未来需求并生成动态补货建议</div>
+        <!-- 点击跳转到同目录下的 demand_forecast.html -->
+        <a class="btn-enter" href="demand_forecast.html">进入演示</a>
+      </div>
+
+      <!-- 卡片2：供应商风险预警与画像 -->
+      <div class="card">
+        <div class="card-icon">🛡️</div>
+        <div class="card-name">供应商风险预警与画像</div>
+        <div class="card-desc">多维度评估供应商风险，实时预警并生成供应商画像报告</div>
+        <!-- 点击跳转到同目录下的 supplier_risk.html -->
+        <a class="btn-enter" href="supplier_risk.html">进入演示</a>
+      </div>
+
+      <!-- 卡片3：物流路径优化与在途监控 -->
+      <div class="card">
+        <div class="card-icon">🚚</div>
+        <div class="card-name">物流路径优化与在途监控</div>
+        <div class="card-desc">智能规划最优物流路径，实时追踪在途状态与异常告警</div>
+        <!-- 点击跳转到同目录下的 route_optimization.html -->
+        <a class="btn-enter" href="route_optimization.html">进入演示</a>
+      </div>
+
+      <!-- 卡片4：供应链控制塔大屏 -->
+      <div class="card">
+        <div class="card-icon">🖥️</div>
+        <div class="card-name">供应链控制塔大屏</div>
+        <div class="card-desc">全局供应链可视化大屏，聚合展示关键指标与实时数据</div>
+        <!-- 点击跳转到同目录下的 control_tower.html -->
+        <a class="btn-enter" href="control_tower.html">进入演示</a>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== 产品架构图 ==================== -->
+  <section class="section" id="architecture">
+    <h2 class="section-title">产品架构</h2>
+    <div class="arch-container">
+      <div id="archChart"></div>
+    </div>
+  </section>
+
+  <!-- ==================== 关于作品集 ==================== -->
+  <section class="section" id="about">
+    <h2 class="section-title">关于作品集</h2>
+    <div class="about-content">
+      <p>
+        《AI供应链决策中枢》是一款面向制造业与物流企业的 AI 决策平台作品集演示项目。<br>
+        本作品集涵盖需求预测、供应商风控、物流路径优化及供应链控制塔四大核心模块，<br>
+        展示产品经理在 AI + 供应链领域的系统化产品设计能力。
+      </p>
+    </div>
+  </section>
+
+  <!-- ==================== 页脚 ==================== -->
+  <footer class="footer">
+    AI供应链决策中枢 · 产品经理作品集
+  </footer>
+
+  <!-- ==================== JavaScript ==================== -->
+  <script>
+    /* ========== 平滑滚动到锚点 ========== */
+    function scrollToArch() {
+      document.getElementById('architecture').scrollIntoView({ behavior: 'smooth' });
+    }
+    function scrollToAbout() {
+      document.getElementById('about').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    /* ========== ECharts 产品架构图 ========== */
+    (function() {
+      var chartDom = document.getElementById('archChart');
+      var myChart = echarts.init(chartDom);
+
+      var option = {
+        tooltip: {
+          trigger: 'item',
+          formatter: function(p) {
+            // 只对节点显示 tooltip
+            if (p.dataType === 'node') {
+              return '<b>' + p.name + '</b><br/>' + (p.data.desc || '');
+            }
+            return '';
+          }
+        },
+        series: [{
+          type: 'graph',
+          layout: 'force',
+          // 力导向布局参数
+          force: {
+            repulsion: 300,
+            edgeLength: [120, 200],
+            gravity: 0.12,
+            layoutAnimation: true
+          },
+          roam: false,
+          draggable: false,
+          // 节点样式
+          symbolSize: 60,
+          itemStyle: {
+            color: '#1a56db',
+            borderColor: '#1e3a8a',
+            borderWidth: 2,
+            shadowBlur: 8,
+            shadowColor: 'rgba(26,86,219,0.3)'
+          },
+          label: {
+            show: true,
+            fontSize: 13,
+            fontWeight: 'bold',
+            color: '#1e293b',
+            position: 'bottom',
+            distance: 10
+          },
+          // 连线样式
+          lineStyle: {
+            color: '#94a3b8',
+            curveness: 0.2,
+            width: 1.5
+          },
+          edgeSymbol: ['none', 'arrow'],
+          edgeSymbolSize: 8,
+          // 数据
+          categories: [
+            { name: '业务功能层' },
+            { name: '聚合展示层' },
+            { name: 'AI能力层' }
+          ],
+          data: [
+            // ---- 业务功能层（上排三个）----
+            {
+              name: '需求预测',
+              desc: '销量预测 · 动态补货',
+              category: 0,
+              symbolSize: 66,
+              x: 150, y: 60,
+              itemStyle: { color: '#3b82f6' }
+            },
+            {
+              name: '智能风控',
+              desc: '风险预警 · 供应商画像',
+              category: 0,
+              symbolSize: 66,
+              x: 500, y: 60,
+              itemStyle: { color: '#3b82f6' }
+            },
+            {
+              name: '物流优化',
+              desc: '路径规划 · 在途监控',
+              category: 0,
+              symbolSize: 66,
+              x: 850, y: 60,
+              itemStyle: { color: '#3b82f6' }
+            },
+            // ---- 聚合展示层（中间）----
+            {
+              name: '供应链控制塔',
+              desc: '全局可视化 · 关键指标聚合',
+              category: 1,
+              symbolSize: 80,
+              x: 500, y: 200,
+              itemStyle: { color: '#f59e0b', borderColor: '#d97706' }
+            },
+            // ---- AI能力层（下排）----
+            {
+              name: '预测模型',
+              desc: '时序预测 · 需求建模',
+              category: 2,
+              symbolSize: 52,
+              x: 200, y: 340,
+              itemStyle: {
+                color: '#e0f2fe',
+                borderColor: '#7dd3fc',
+                borderWidth: 2
+              }
+            },
+            {
+              name: '风险评分',
+              desc: '多维评估 · 实时预警',
+              category: 2,
+              symbolSize: 52,
+              x: 400, y: 340,
+              itemStyle: {
+                color: '#e0f2fe',
+                borderColor: '#7dd3fc',
+                borderWidth: 2
+              }
+            },
+            {
+              name: '路径优化',
+              desc: '智能算法 · 动态调度',
+              category: 2,
+              symbolSize: 52,
+              x: 600, y: 340,
+              itemStyle: {
+                color: '#e0f2fe',
+                borderColor: '#7dd3fc',
+                borderWidth: 2
+              }
+            },
+            {
+              name: 'LLM分析',
+              desc: '大语言模型 · 智能归因',
+              category: 2,
+              symbolSize: 52,
+              x: 800, y: 340,
+              itemStyle: {
+                color: '#e0f2fe',
+                borderColor: '#7dd3fc',
+                borderWidth: 2
+              }
+            }
+          ],
+          links: [
+            // 业务模块 → 控制塔
+            { source: '需求预测', target: '供应链控制塔',
+              lineStyle: { color: '#3b82f6', width: 2 } },
+            { source: '智能风控', target: '供应链控制塔',
+              lineStyle: { color: '#3b82f6', width: 2 } },
+            { source: '物流优化', target: '供应链控制塔',
+              lineStyle: { color: '#3b82f6', width: 2 } },
+            // AI能力 → 业务模块（虚线表示支撑关系）
+            { source: '预测模型', target: '需求预测',
+              lineStyle: { color: '#94a3b8', type: 'dashed', width: 1.5 } },
+            { source: '风险评分', target: '智能风控',
+              lineStyle: { color: '#94a3b8', type: 'dashed', width: 1.5 } },
+            { source: '路径优化', target: '物流优化',
+              lineStyle: { color: '#94a3b8', type: 'dashed', width: 1.5 } },
+            { source: 'LLM分析', target: '供应链控制塔',
+              lineStyle: { color: '#94a3b8', type: 'dashed', width: 1.5 } }
+          ]
+        }],
+        // 分层背景标注
+        graphic: [
+          {
+            type: 'rect',
+            left: 60, top: 18,
+            shape: { width: 980, height: 112 },
+            style: {
+              fill: 'rgba(59,130,246,0.04)',
+              stroke: 'rgba(59,130,246,0.2)',
+              lineWidth: 1,
+              borderRadius: 8
+            },
+            z: 0
+          },
+          {
+            type: 'rect',
+            left: 60, top: 158,
+            shape: { width: 980, height: 112 },
+            style: {
+              fill: 'rgba(245,158,11,0.04)',
+              stroke: 'rgba(245,158,11,0.2)',
+              lineWidth: 1,
+              borderRadius: 8
+            },
+            z: 0
+          },
+          {
+            type: 'rect',
+            left: 60, top: 298,
+            shape: { width: 980, height: 112 },
+            style: {
+              fill: 'rgba(100,116,139,0.04)',
+              stroke: 'rgba(100,116,139,0.2)',
+              lineWidth: 1,
+              borderRadius: 8
+            },
+            z: 0
+          },
+          // 层标签
+          {
+            type: 'text',
+            left: 70, top: 27,
+            style: {
+              text: '业务功能层',
+              fill: '#3b82f6',
+              fontSize: 12,
+              fontWeight: 'bold'
+            },
+            z: 1
+          },
+          {
+            type: 'text',
+            left: 70, top: 167,
+            style: {
+              text: '聚合展示层',
+              fill: '#f59e0b',
+              fontSize: 12,
+              fontWeight: 'bold'
+            },
+            z: 1
+          },
+          {
+            type: 'text',
+            left: 70, top: 307,
+            style: {
+              text: 'AI能力层 — 预测模型 / 风险评分 / 路径优化 / LLM分析',
+              fill: '#64748b',
+              fontSize: 12,
+              fontWeight: 'bold'
+            },
+            z: 1
+          }
+        ]
+      };
+
+      myChart.setOption(option);
+
+      // 窗口大小变化时自适应
+      window.addEventListener('resize', function() {
+        myChart.resize();
+      });
+    })();
+  </script>
+</body>
+</html>

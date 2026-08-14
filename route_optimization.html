@@ -1,0 +1,1085 @@
+<!-- 文件名：route_optimization.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI供应链决策中枢 - 物流路径优化与在途监控</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: #f0f2f5;
+      color: #141414;
+      min-height: 100vh;
+    }
+
+    /* 导航条 */
+    .navbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1d3b6c;
+      color: #fff;
+      padding: 0 32px;
+      height: 52px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    }
+    .navbar .logo { font-size: 17px; font-weight: 600; letter-spacing: .5px; }
+    .navbar .nav-link { color: #c8daf5; text-decoration: none; font-size: 14px; transition: color .2s; }
+    .navbar .nav-link:hover { color: #fff; }
+
+    /* 主容器 */
+    .main-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px 28px;
+    }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: #1d3b6c;
+      margin-bottom: 20px;
+    }
+
+    .content {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    /* 参数面板 */
+    .param-panel {
+      width: 280px;
+      flex-shrink: 0;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      padding: 24px 20px;
+    }
+    .param-panel h3 {
+      font-size: 15px;
+      color: #1d3b6c;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e8ecf1;
+    }
+    .param-group { margin-bottom: 18px; }
+    .param-group label {
+      display: block;
+      font-size: 13px;
+      color: #5a6872;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .param-group input[type="text"] {
+      width: 100%;
+      height: 36px;
+      border: 1px solid #d9dfe5;
+      border-radius: 6px;
+      padding: 0 10px;
+      font-size: 14px;
+      color: #141414;
+      background: #fafbfc;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .param-group input[type="text"]:focus {
+      border-color: #3b82f6;
+      background: #fff;
+    }
+
+    .radio-group {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .radio-group label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      color: #5a6872;
+      font-weight: 400;
+      cursor: pointer;
+      padding: 4px 10px;
+      border: 1px solid #d9dfe5;
+      border-radius: 6px;
+      transition: all .2s;
+      margin-bottom: 0;
+    }
+    .radio-group label:hover { border-color: #3b82f6; background: #f0f7ff; }
+    .radio-group input[type="radio"] { accent-color: #3b82f6; margin: 0; }
+    .radio-group label:has(input:checked) {
+      border-color: #3b82f6;
+      background: #f0f7ff;
+      color: #3b82f6;
+      font-weight: 500;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .slider-row input[type="range"] {
+      flex: 1;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: #d9dfe5;
+      border-radius: 2px;
+      outline: none;
+      padding: 0;
+      border: none;
+    }
+    .slider-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #3b82f6;
+      cursor: pointer;
+    }
+    .slider-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: #3b82f6;
+      min-width: 38px;
+      text-align: right;
+    }
+
+    .btn-run {
+      width: 100%;
+      height: 40px;
+      border: none;
+      border-radius: 6px;
+      background: #3b82f6;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: background .2s, box-shadow .2s;
+    }
+    .btn-run:hover { background: #2563eb; box-shadow: 0 2px 8px rgba(59,130,246,.35); }
+    .btn-run:active { background: #1d4ed8; }
+    .btn-run:disabled { background: #93c5fd; cursor: not-allowed; }
+
+    /* 右侧区域 */
+    .right-area {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* 地图卡片 */
+    .map-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      padding: 16px;
+    }
+    .map-card h3 {
+      font-size: 15px;
+      color: #1d3b6c;
+      margin-bottom: 12px;
+    }
+    #map {
+      width: 100%;
+      height: 500px;
+      border-radius: 6px;
+      border: 1px solid #e8ecf1;
+    }
+
+    /* 优化收益卡 */
+    .benefit-row {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+    }
+    .benefit-item {
+      flex: 1;
+      background: #f0f7ff;
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+    }
+    .benefit-item .benefit-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: #3b82f6;
+    }
+    .benefit-item .benefit-label {
+      font-size: 12px;
+      color: #5a6872;
+      margin-top: 4px;
+    }
+    .benefit-item .benefit-pct {
+      font-size: 12px;
+      color: #10b981;
+      font-weight: 500;
+    }
+
+    /* AI 推荐理由 */
+    .ai-reason {
+      background: #fafbfc;
+      border-left: 3px solid #3b82f6;
+      border-radius: 0 6px 6px 0;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #4a5568;
+      line-height: 1.6;
+      margin-top: 12px;
+    }
+
+    /* 底部两栏 */
+    .bottom-row {
+      display: flex;
+      gap: 20px;
+    }
+    .bottom-left {
+      flex: 1;
+      min-width: 0;
+    }
+    .bottom-right {
+      width: 300px;
+      flex-shrink: 0;
+    }
+
+    /* 方案对比表格 */
+    .table-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      padding: 16px;
+    }
+    .table-card h3 {
+      font-size: 15px;
+      color: #1d3b6c;
+      margin-bottom: 12px;
+    }
+    .table-card table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .table-card th {
+      background: #f8fafd;
+      color: #5a6872;
+      font-weight: 500;
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid #e8ecf1;
+      white-space: nowrap;
+    }
+    .table-card td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f0f2f5;
+      color: #141414;
+    }
+    .table-card tr:hover td { background: #f8fafd; }
+    .table-card tr.selected td { background: #f0f7ff; }
+    .table-card tr.selected td:first-child { border-left: 3px solid #3b82f6; }
+    .btn-select {
+      height: 28px;
+      padding: 0 14px;
+      border: 1px solid #3b82f6;
+      border-radius: 4px;
+      background: #fff;
+      color: #3b82f6;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-select:hover { background: #3b82f6; color: #fff; }
+    .btn-select.active { background: #3b82f6; color: #fff; cursor: default; }
+
+    /* 预警面板 */
+    .alert-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      padding: 16px;
+      height: 100%;
+    }
+    .alert-card h3 {
+      font-size: 15px;
+      color: #1d3b6c;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .alert-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: #ef4444;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .alert-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 340px;
+      overflow-y: auto;
+    }
+    .alert-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: #fef2f2;
+      border-left: 3px solid #ef4444;
+      font-size: 13px;
+      color: #4a5568;
+      line-height: 1.5;
+      animation: slideIn .3s ease;
+    }
+    .alert-item.warn {
+      background: #fffbeb;
+      border-left-color: #f59e0b;
+    }
+    .alert-item .alert-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .alert-item .alert-time {
+      font-size: 11px;
+      color: #8a94a0;
+      margin-top: 2px;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .alert-empty {
+      text-align: center;
+      color: #8a94a0;
+      font-size: 13px;
+      padding: 40px 0;
+    }
+
+    /* 图例 */
+    .map-legend {
+      display: flex;
+      gap: 16px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: #5a6872;
+      align-items: center;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-line {
+      width: 24px;
+      height: 0;
+      border-top: 3px solid;
+    }
+    .legend-line.original { border-color: #ef4444; border-style: dashed; }
+    .legend-line.optimized { border-color: #3b82f6; border-style: solid; }
+    .legend-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .legend-dot.start { background: #10b981; }
+    .legend-dot.end { background: #ef4444; }
+
+    /* 车辆标记动画 */
+    @keyframes vehiclePulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6); }
+      50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+    }
+    .legend-dot.vehicle-normal { background: #10b981; }
+    .legend-dot.vehicle-delayed {
+      background: #f59e0b;
+      animation: vehiclePulse 1.5s infinite;
+    }
+
+    /* 响应式 */
+    @media (max-width: 1100px) {
+      .content { flex-direction: column; }
+      .param-panel { width: 100%; }
+      .bottom-row { flex-direction: column; }
+      .bottom-right { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 导航条 -->
+  <nav class="navbar">
+    <span class="logo">AI供应链决策中枢</span>
+    <a class="nav-link" href="index.html">返回首页</a>
+  </nav>
+
+  <div class="main-container">
+    <h1 class="page-title">智能物流路径优化</h1>
+
+    <div class="content">
+
+      <!-- 左侧参数面板 -->
+      <div class="param-panel">
+        <h3>参数设置</h3>
+
+        <div class="param-group">
+          <label for="startPoint">起点</label>
+          <input type="text" id="startPoint" value="上海">
+        </div>
+
+        <div class="param-group">
+          <label for="endPoint">终点</label>
+          <input type="text" id="endPoint" value="成都">
+        </div>
+
+        <div class="param-group">
+          <label>优化目标</label>
+          <div class="radio-group">
+            <label><input type="radio" name="goal" value="cost" checked>成本优先</label>
+            <label><input type="radio" name="goal" value="time">时效优先</label>
+            <label><input type="radio" name="goal" value="balanced">综合</label>
+          </div>
+        </div>
+
+        <div class="param-group">
+          <label>成本权重</label>
+          <div class="slider-row">
+            <input type="range" id="costWeight" min="0" max="1" value="0.5" step="0.1">
+            <span class="slider-value" id="costWeightVal">0.5</span>
+          </div>
+        </div>
+
+        <div class="param-group">
+          <label>时效权重</label>
+          <div class="slider-row">
+            <input type="range" id="timeWeight" min="0" max="1" value="0.5" step="0.1">
+            <span class="slider-value" id="timeWeightVal">0.5</span>
+          </div>
+        </div>
+
+        <button class="btn-run" id="btnRun">运行优化</button>
+      </div>
+
+      <!-- 右侧区域 -->
+      <div class="right-area">
+        <!-- 地图 -->
+        <div class="map-card">
+          <h3>路线可视化</h3>
+          <div id="map"></div>
+
+          <!-- 优化收益卡 -->
+          <div class="benefit-row" id="benefitRow">
+            <div class="benefit-item">
+              <div class="benefit-value" id="saveDistance">--</div>
+              <div class="benefit-label">节省里程</div>
+              <div class="benefit-pct" id="saveDistancePct"></div>
+            </div>
+            <div class="benefit-item">
+              <div class="benefit-value" id="saveTime">--</div>
+              <div class="benefit-label">节省时间</div>
+              <div class="benefit-pct" id="saveTimePct"></div>
+            </div>
+            <div class="benefit-item">
+              <div class="benefit-value" id="saveCost">--</div>
+              <div class="benefit-label">降低成本</div>
+              <div class="benefit-pct" id="saveCostPct"></div>
+            </div>
+            <div class="benefit-item">
+              <div class="benefit-value" id="showScore">--</div>
+              <div class="benefit-label">综合评分</div>
+              <div class="benefit-pct"></div>
+            </div>
+          </div>
+
+          <!-- AI 推荐理由 -->
+          <div class="ai-reason" id="aiReason">点击"运行优化"获取 AI 推荐理由</div>
+
+          <div class="map-legend">
+            <span class="legend-item"><span class="legend-line original"></span>原始路线</span>
+            <span class="legend-item"><span class="legend-line optimized"></span>优化后路线</span>
+            <span class="legend-item"><span class="legend-dot start"></span>起点</span>
+            <span class="legend-item"><span class="legend-dot end"></span>终点</span>
+            <span class="legend-item"><span class="legend-dot vehicle-normal"></span>在途正常车辆</span>
+            <span class="legend-item"><span class="legend-dot vehicle-delayed"></span>在途异常车辆</span>
+          </div>
+        </div>
+
+        <!-- 底部：方案对比 + 预警 -->
+        <div class="bottom-row">
+          <div class="bottom-left">
+            <div class="table-card">
+              <h3>方案对比</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>方案名称</th>
+                    <th>总里程（公里）</th>
+                    <th>预计时间（小时）</th>
+                    <th>运输成本（元）</th>
+                    <th>综合得分</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="tableBody">
+                  <tr>
+                    <td colspan="6" style="text-align:center;color:#8a94a0;padding:32px;">请先运行优化</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="bottom-right">
+            <div class="alert-card">
+              <h3>
+                在途异常预警
+                <span class="alert-badge" id="alertCount">0</span>
+              </h3>
+              <div class="alert-list" id="alertList">
+                <div class="alert-empty">暂无预警事件</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== 模拟数据 ====================
+    // 原始路线坐标（上海 -> 南京 -> 合肥 -> 武汉 -> 西安 -> 成都，绕行北线）
+    const ORIGINAL_ROUTE = [
+      [31.2304, 121.4737], // 上海
+      [32.0603, 118.7969], // 南京
+      [31.8206, 117.2272], // 合肥
+      [30.5928, 114.3055], // 武汉
+      [34.3416, 108.9398], // 西安（绕行）
+      [30.5728, 104.0668], // 成都
+    ];
+
+    // 优化后路线坐标（上海 -> 南京 -> 合肥 -> 武汉 -> 重庆 -> 成都，更短）
+    const OPTIMIZED_ROUTE = [
+      [31.2304, 121.4737], // 上海
+      [32.0603, 118.7969], // 南京
+      [31.8206, 117.2272], // 合肥
+      [30.5928, 114.3055], // 武汉
+      [29.5630, 106.5516], // 重庆（替代西安）
+      [30.5728, 104.0668], // 成都
+    ];
+
+    const MOCK_DATA = {
+      optimizedRoute: {
+        path: OPTIMIZED_ROUTE,
+        distance: 1856,
+        time: 26.5,
+        cost: 12800,
+      },
+      alternatives: [
+        { id: 0, name: '原始路线（北线绕行）', path: ORIGINAL_ROUTE, distance: 2370, time: 36.0, cost: 16300, score: 72 },
+        { id: 1, name: '优化方案（沪渝高速）', path: OPTIMIZED_ROUTE, distance: 1856, time: 26.5, cost: 12800, score: 92 },
+        { id: 2, name: '备选方案（经长沙）', path: [
+          [31.2304, 121.4737],
+          [30.2741, 120.1551], // 杭州
+          [29.2940, 117.2039], // 景德镇
+          [28.2282, 112.9388], // 长沙
+          [27.7200, 108.3400], // 怀化
+          [30.5728, 104.0668],
+        ], distance: 2150, time: 29.0, cost: 14600, score: 84 },
+      ],
+      anomalies: [
+        { vehicle: '车辆A（沪D·S8732）', delay: 2.0, reason: 'G42沪蓉高速宜昌段施工，车道封闭，预计延误2小时', level: 'high' },
+        { vehicle: '车辆B（川A·K2190）', delay: 1.5, reason: '天气预警：恩施段暴雨，限速60km/h，预计延误1.5小时', level: 'high' },
+      ],
+    };
+
+    // ==================== 在途车辆数据 ====================
+    const MOCK_VEHICLES = [
+      { id: 'A', name: '车辆A（沪D·S8732）', status: 'delayed', delay: 2.0, progress: 0.35, speed: 55 },
+      { id: 'B', name: '车辆B（川A·K2190）', status: 'delayed', delay: 1.5, progress: 0.58, speed: 48 },
+      { id: 'C', name: '车辆C（渝B·P7701）', status: 'normal', delay: 0.0, progress: 0.75, speed: 72 },
+    ];
+
+    // ==================== API 函数 ====================
+    async function fetchRouteOptimization(params) {
+      // 真实API调用示例：
+      // const response = await fetch('https://api.coze.cn/v1/workflow/run', {
+      //   method: 'POST',
+      //   headers: { 'Authorization': 'Bearer YOUR_TOKEN', 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ workflow_id: 'YOUR_WORKFLOW_ID', parameters: params })
+      // });
+      // const data = await response.json();
+      // return data.data;
+
+      // 模拟网络延迟
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      // 根据权重微调结果
+      const costW = params.costWeight;
+      const timeW = params.timeWeight;
+
+      const base = MOCK_DATA;
+      const adjustedAlternatives = base.alternatives.map(alt => {
+        const adjustedScore = Math.round(
+          (alt.id === 0 ? 72 : alt.id === 1 ? 92 : 84)
+          * (1 + (costW - 0.5) * 0.1 + (timeW - 0.5) * 0.1)
+        );
+        return {
+          ...alt,
+          score: Math.min(100, Math.max(60, adjustedScore)),
+        };
+      });
+
+      return {
+        optimizedRoute: {
+          ...base.optimizedRoute,
+          cost: Math.round(base.optimizedRoute.cost * (1 + (costW - 0.5) * 0.2)),
+          time: +(base.optimizedRoute.time * (1 + (timeW - 0.5) * 0.2)).toFixed(1),
+        },
+        alternatives: adjustedAlternatives,
+        anomalies: base.anomalies,
+      };
+    }
+
+    // ==================== 地图初始化 ====================
+    let map;
+    let currentRouteLayer = null;
+    let originalRouteLayer = null;
+    let startMarker = null;
+    let endMarker = null;
+    let selectedRouteIndex = 1; // 默认选中优化方案
+    let vehicleMarkers = [];
+    let vehicleData = [];
+    let vehicleTimer = null;
+    let currentRouteCoords = null;
+
+    function initMap() {
+      map = L.map('map').setView([31.5, 112.5], 5);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 18,
+      }).addTo(map);
+    }
+
+    function clearRoutes() {
+      if (currentRouteLayer) { map.removeLayer(currentRouteLayer); currentRouteLayer = null; }
+      if (originalRouteLayer) { map.removeLayer(originalRouteLayer); originalRouteLayer = null; }
+      if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
+      if (endMarker) { map.removeLayer(endMarker); endMarker = null; }
+      clearVehicles();
+    }
+
+    function drawRoutes(originalRoute, optimizedRoute) {
+      clearRoutes();
+
+      // 原始路线（红色虚线）
+      originalRouteLayer = L.polyline(originalRoute, {
+        color: '#ef4444',
+        weight: 3,
+        dashArray: '8, 6',
+        opacity: 0.7,
+      }).addTo(map);
+
+      // 优化后路线（蓝色实线）
+      currentRouteLayer = L.polyline(optimizedRoute, {
+        color: '#3b82f6',
+        weight: 4,
+        opacity: 0.9,
+      }).addTo(map);
+
+      // 起点标记（绿色）
+      const startIcon = L.divIcon({
+        className: 'custom-marker',
+        html: '<div style="background:#10b981;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);"></div>',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      });
+      startMarker = L.marker(originalRoute[0], { icon: startIcon })
+        .bindPopup('<b>起点：上海</b>')
+        .addTo(map);
+
+      // 终点标记（红色）
+      const endIcon = L.divIcon({
+        className: 'custom-marker',
+        html: '<div style="background:#ef4444;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);"></div>',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      });
+      const endCoords = optimizedRoute[optimizedRoute.length - 1];
+      endMarker = L.marker(endCoords, { icon: endIcon })
+        .bindPopup('<b>终点：成都</b>')
+        .addTo(map);
+
+      // 自适应视野
+      const allPoints = [...originalRoute, ...optimizedRoute];
+      map.fitBounds(L.latLngBounds(allPoints), { padding: [40, 40] });
+    }
+
+    function highlightRoute(routePath) {
+      if (currentRouteLayer) { map.removeLayer(currentRouteLayer); }
+      currentRouteLayer = L.polyline(routePath, {
+        color: '#3b82f6',
+        weight: 5,
+        opacity: 1,
+      }).addTo(map);
+    }
+
+    // ==================== 在途车辆实时移动 ====================
+    function getPointOnRoute(routeCoords, progress) {
+      if (progress <= 0) return L.latLng(routeCoords[0]);
+      if (progress >= 1) return L.latLng(routeCoords[routeCoords.length - 1]);
+
+      const segments = [];
+      let totalLength = 0;
+      for (let i = 0; i < routeCoords.length - 1; i++) {
+        const a = L.latLng(routeCoords[i]);
+        const b = L.latLng(routeCoords[i + 1]);
+        const d = a.distanceTo(b);
+        segments.push({ a, b, startDist: totalLength, length: d });
+        totalLength += d;
+      }
+
+      const targetDist = progress * totalLength;
+      for (const seg of segments) {
+        if (targetDist <= seg.startDist + seg.length) {
+          const t = (targetDist - seg.startDist) / seg.length;
+          return L.latLng(
+            seg.a.lat + (seg.b.lat - seg.a.lat) * t,
+            seg.a.lng + (seg.b.lng - seg.a.lng) * t
+          );
+        }
+      }
+      return L.latLng(routeCoords[routeCoords.length - 1]);
+    }
+
+    function createVehicleIcon(status) {
+      const isDelayed = status === 'delayed';
+      const bg = isDelayed ? '#f59e0b' : '#10b981';
+      const anim = isDelayed ? 'animation:vehiclePulse 1.5s infinite;' : '';
+      const shadow = isDelayed
+        ? 'box-shadow:0 0 0 0 rgba(245,158,11,.6);'
+        : 'box-shadow:0 1px 4px rgba(0,0,0,.3);';
+      return L.divIcon({
+        className: '',
+        html: '<div style="background:' + bg + ';width:14px;height:14px;border-radius:50%;border:2px solid #fff;' + shadow + anim + '"></div>',
+        iconSize: [14, 14],
+        iconAnchor: [7, 7],
+      });
+    }
+
+    function createVehiclePopup(v) {
+      const statusColor = v.status === 'delayed' ? '#f59e0b' : '#10b981';
+      const statusText = v.status === 'delayed' ? '预计延误' + v.delay + '小时' : '正常行驶';
+      return '<b>' + v.name + '</b><br>'
+        + '<span style="color:' + statusColor + '">' + statusText + '</span><br>'
+        + '当前时速 ' + v.speed + ' km/h';
+    }
+
+    function clearVehicles() {
+      stopVehicleSimulation();
+      vehicleMarkers.forEach(m => map.removeLayer(m));
+      vehicleMarkers = [];
+      vehicleData = [];
+      currentRouteCoords = null;
+    }
+
+    function initVehicles(routeCoords) {
+      clearVehicles();
+      currentRouteCoords = routeCoords;
+      vehicleData = MOCK_VEHICLES.map(v => ({ ...v }));
+
+      vehicleData.forEach(v => {
+        const pos = getPointOnRoute(routeCoords, v.progress);
+        const icon = createVehicleIcon(v.status);
+        const marker = L.marker(pos, { icon })
+          .bindPopup(createVehiclePopup(v))
+          .addTo(map);
+        marker._vehicleId = v.id;
+        vehicleMarkers.push(marker);
+      });
+
+      startVehicleSimulation();
+    }
+
+    function tickVehicles() {
+      if (!currentRouteCoords || vehicleMarkers.length === 0) return;
+      vehicleData.forEach((v, i) => {
+        v.progress += (Math.random() * 0.015) + 0.005;
+        if (v.progress > 1) v.progress = 0.1;
+        const pos = getPointOnRoute(currentRouteCoords, v.progress);
+        vehicleMarkers[i].setLatLng(pos);
+        vehicleMarkers[i].setPopupContent(createVehiclePopup(v));
+      });
+    }
+
+    function startVehicleSimulation() {
+      stopVehicleSimulation();
+      vehicleTimer = setInterval(tickVehicles, 1500);
+    }
+
+    function stopVehicleSimulation() {
+      if (vehicleTimer) { clearInterval(vehicleTimer); vehicleTimer = null; }
+    }
+
+    // ==================== 表格渲染 ====================
+    function renderTable(alternatives, selectedIdx) {
+      const tbody = document.getElementById('tableBody');
+      tbody.innerHTML = alternatives.map(alt => {
+        const isSelected = alt.id === selectedIdx;
+        const isOptimized = alt.id === 1;
+        const name = isOptimized ? alt.name + ' <span style="font-size:11px;color:#3b82f6;font-weight:600;">（推荐）</span>' : alt.name;
+        return `
+          <tr class="${isSelected ? 'selected' : ''}" data-route-id="${alt.id}">
+            <td>${name}</td>
+            <td>${alt.distance}</td>
+            <td>${alt.time}</td>
+            <td>${alt.cost}</td>
+            <td style="font-weight:600;color:${alt.score >= 90 ? '#10b981' : alt.score >= 80 ? '#f59e0b' : '#5a6872'}">${alt.score}</td>
+            <td>
+              <button class="btn-select ${isSelected ? 'active' : ''}" data-route-id="${alt.id}">
+                ${isSelected ? '已选择' : '选择'}
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      // 绑定点击事件
+      tbody.querySelectorAll('.btn-select').forEach(btn => {
+        btn.addEventListener('click', function () {
+          const routeId = parseInt(this.dataset.routeId);
+          selectRoute(routeId, alternatives);
+        });
+      });
+
+      tbody.querySelectorAll('tr').forEach(tr => {
+        tr.addEventListener('click', function (e) {
+          if (e.target.tagName === 'BUTTON') return;
+          const routeId = parseInt(this.dataset.routeId);
+          selectRoute(routeId, alternatives);
+        });
+      });
+    }
+
+    // ==================== 收益卡与AI推荐理由 ====================
+    // 原始路线基准（id=0）
+    const ORIGINAL_BENCHMARK = { distance: 2370, time: 36.0, cost: 16300 };
+
+    function updateBenefitCard(selectedAlt) {
+      const saveDistance = ORIGINAL_BENCHMARK.distance - selectedAlt.distance;
+      const saveTime = ORIGINAL_BENCHMARK.time - selectedAlt.time;
+      const saveCost = ORIGINAL_BENCHMARK.cost - selectedAlt.cost;
+
+      document.getElementById('saveDistance').textContent = saveDistance > 0 ? saveDistance + ' 公里' : '--';
+      document.getElementById('saveDistancePct').textContent = saveDistance > 0
+        ? '↓' + (saveDistance / ORIGINAL_BENCHMARK.distance * 100).toFixed(1) + '%' : '';
+
+      document.getElementById('saveTime').textContent = saveTime > 0 ? saveTime.toFixed(1) + ' 小时' : '--';
+      document.getElementById('saveTimePct').textContent = saveTime > 0
+        ? '↓' + (saveTime / ORIGINAL_BENCHMARK.time * 100).toFixed(1) + '%' : '';
+
+      document.getElementById('saveCost').textContent = saveCost > 0 ? '¥' + saveCost.toLocaleString() : '--';
+      document.getElementById('saveCostPct').textContent = saveCost > 0
+        ? '↓' + (saveCost / ORIGINAL_BENCHMARK.cost * 100).toFixed(1) + '%' : '';
+
+      document.getElementById('showScore').textContent = selectedAlt.score + ' 分';
+    }
+
+    function updateAIReason(selectedAlt) {
+      const costW = parseFloat(sliderCost.value);
+      const timeW = parseFloat(sliderTime.value);
+      const saveDistance = ORIGINAL_BENCHMARK.distance - selectedAlt.distance;
+      const saveTime = ORIGINAL_BENCHMARK.time - selectedAlt.time;
+      const saveCost = ORIGINAL_BENCHMARK.cost - selectedAlt.cost;
+
+      const pathDescMap = {
+        0: '沿北线经南京、合肥、武汉、西安绕行至成都',
+        1: '经南京、合肥、武汉、重庆直达成都，避开西安北线',
+        2: '经杭州、长沙中转至成都',
+      };
+      const pathDesc = pathDescMap[selectedAlt.id] || '';
+
+      const reasonEl = document.getElementById('aiReason');
+      if (selectedAlt.id === 0) {
+        reasonEl.innerHTML =
+          'AI 综合成本权重 <b>' + costW.toFixed(1) + '</b>、时效权重 <b>' + timeW.toFixed(1) + '</b>，' +
+          '『<b>' + selectedAlt.name + '</b>』：' + pathDesc + '。' +
+          '该方案为原始基准路线，无优化收益，建议选择推荐方案。';
+      } else {
+        reasonEl.innerHTML =
+          'AI 综合成本权重 <b>' + costW.toFixed(1) + '</b>、时效权重 <b>' + timeW.toFixed(1) + '</b>，' +
+          '推荐『<b>' + selectedAlt.name + '</b>』：' + pathDesc + '，' +
+          '预计节省 <b>' + saveDistance + ' 公里</b>、<b>' + saveTime.toFixed(1) + ' 小时</b>、<b>¥' + saveCost.toLocaleString() + '</b>。';
+      }
+    }
+
+    function selectRoute(routeId, alternatives) {
+      selectedRouteIndex = routeId;
+      const alt = alternatives.find(a => a.id === routeId);
+      if (alt) {
+        highlightRoute(alt.path);
+      }
+      renderTable(alternatives, routeId);
+      if (alt) {
+        updateBenefitCard(alt);
+        updateAIReason(alt);
+        initVehicles(alt.path);
+      }
+    }
+
+    // ==================== 预警面板 ====================
+    let anomalyInterval = null;
+
+    function renderAnomalies(anomalies) {
+      const list = document.getElementById('alertList');
+      const count = document.getElementById('alertCount');
+
+      if (!anomalies || anomalies.length === 0) {
+        list.innerHTML = '<div class="alert-empty">暂无预警事件</div>';
+        count.textContent = '0';
+        return;
+      }
+
+      count.textContent = anomalies.length;
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      list.innerHTML = anomalies.map(a => {
+        const isHigh = a.level === 'high';
+        const icon = isHigh ? '&#9888;' : '&#8505;';
+        const cls = isHigh ? '' : 'warn';
+        return `
+          <div class="alert-item ${cls}">
+            <span class="alert-icon">${icon}</span>
+            <div>
+              <div><b>${a.vehicle}</b></div>
+              <div>${a.reason}</div>
+              <div class="alert-time">${timeStr}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function startAnomalySimulation(baseAnomalies) {
+      if (anomalyInterval) clearInterval(anomalyInterval);
+
+      // 随机刷新预警（模拟新事件加入或状态变化）
+      anomalyInterval = setInterval(() => {
+        const shuffled = [...baseAnomalies].sort(() => Math.random() - 0.5);
+        const count = Math.floor(Math.random() * 3) + 1;
+        const selected = shuffled.slice(0, count);
+
+        // 随机修改延迟时间
+        const modified = selected.map(a => ({
+          ...a,
+          delay: +(a.delay + (Math.random() - 0.5) * 0.5).toFixed(1),
+          level: Math.random() > 0.7 ? 'high' : 'low',
+        }));
+
+        renderAnomalies(modified);
+      }, 8000);
+    }
+
+    // ==================== 交互逻辑 ====================
+    const sliderCost = document.getElementById('costWeight');
+    const sliderCostVal = document.getElementById('costWeightVal');
+    const sliderTime = document.getElementById('timeWeight');
+    const sliderTimeVal = document.getElementById('timeWeightVal');
+
+    // 滑块联动：防抖标记，避免互相触发死循环
+    let sliderLocked = false;
+
+    sliderCost.addEventListener('input', () => {
+      if (sliderLocked) return;
+      sliderLocked = true;
+      const val = parseFloat(sliderCost.value);
+      sliderCostVal.textContent = val.toFixed(1);
+      sliderTime.value = (1 - val).toFixed(1);
+      sliderTimeVal.textContent = (1 - val).toFixed(1);
+      sliderLocked = false;
+    });
+
+    sliderTime.addEventListener('input', () => {
+      if (sliderLocked) return;
+      sliderLocked = true;
+      const val = parseFloat(sliderTime.value);
+      sliderTimeVal.textContent = val.toFixed(1);
+      sliderCost.value = (1 - val).toFixed(1);
+      sliderCostVal.textContent = (1 - val).toFixed(1);
+      sliderLocked = false;
+    });
+
+    document.getElementById('btnRun').addEventListener('click', async () => {
+      const btn = document.getElementById('btnRun');
+      btn.textContent = '优化中...';
+      btn.disabled = true;
+
+      const params = {
+        start: document.getElementById('startPoint').value,
+        end: document.getElementById('endPoint').value,
+        goal: document.querySelector('input[name="goal"]:checked').value,
+        costWeight: parseFloat(sliderCost.value),
+        timeWeight: parseFloat(sliderTime.value),
+      };
+
+      try {
+        const data = await fetchRouteOptimization(params);
+
+        // 更新地图
+        drawRoutes(ORIGINAL_ROUTE, data.optimizedRoute.path);
+
+        // 选中推荐方案（id=1）
+        selectRoute(1, data.alternatives);
+
+        // 更新预警
+        renderAnomalies(data.anomalies);
+        startAnomalySimulation(data.anomalies);
+
+      } catch (err) {
+        console.error('路径优化请求失败：', err);
+        document.getElementById('tableBody').innerHTML =
+          '<tr><td colspan="6" style="text-align:center;color:#ef4444;padding:32px;">请求失败，请稍后重试</td></tr>';
+      } finally {
+        btn.textContent = '运行优化';
+        btn.disabled = false;
+      }
+    });
+
+    // ==================== 初始化 ====================
+    initMap();
+
+    // 响应式：窗口大小变化时重置地图
+    window.addEventListener('resize', () => {
+      if (map) { map.invalidateSize(); }
+    });
+
+    // 延迟确保地图容器渲染完成后再调整大小
+    setTimeout(() => {
+      if (map) { map.invalidateSize(); }
+    }, 300);
+
+    // 自动初始化：页面打开即显示完整演示数据
+    setTimeout(() => {
+      drawRoutes(ORIGINAL_ROUTE, OPTIMIZED_ROUTE);
+      selectRoute(1, MOCK_DATA.alternatives);
+      renderAnomalies(MOCK_DATA.anomalies);
+    }, 400);
+  </script>
+</body>
+</html>

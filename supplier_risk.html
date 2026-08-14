@@ -1,0 +1,2038 @@
+<!-- 文件名：supplier_risk.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI供应链决策中枢 - 供应商断供风险预警</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: #f0f2f5;
+      color: #141414;
+      min-height: 100vh;
+    }
+
+    /* 顶部导航条 */
+    .navbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1d3b6c;
+      color: #fff;
+      padding: 0 32px;
+      height: 52px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    }
+    .navbar .logo { font-size: 17px; font-weight: 600; letter-spacing: .5px; }
+    .navbar .nav-link { color: #c8daf5; text-decoration: none; font-size: 14px; transition: color .2s; }
+    .navbar .nav-link:hover { color: #fff; }
+
+    /* 菜单导航条 */
+    .menu-bar {
+      background: #fff;
+      border-bottom: 1px solid #e8ecf1;
+      box-shadow: 0 1px 4px rgba(0,0,0,.04);
+      padding: 0 32px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+    }
+    .menu-item {
+      position: relative;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      padding: 0 18px;
+      font-size: 14px;
+      color: #2c3e50;
+      cursor: pointer;
+      user-select: none;
+      border-bottom: 2px solid transparent;
+      transition: all .2s;
+    }
+    .menu-item:hover { color: #1d3b6c; background: #f5f8fc; }
+    .menu-item.active { color: #1d3b6c; font-weight: 600; border-bottom-color: #1d3b6c; }
+    .menu-item .arrow { font-size: 10px; margin-left: 4px; transition: transform .2s; }
+    .menu-item.open .arrow { transform: rotate(180deg); }
+
+    .dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: #fff;
+      border: 1px solid #e8ecf1;
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.1);
+      min-width: 200px;
+      z-index: 100;
+      padding: 4px 0;
+    }
+    .dropdown.show { display: block; }
+    .dropdown-item {
+      padding: 10px 18px;
+      font-size: 13px;
+      color: #2c3e50;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s;
+    }
+    .dropdown-item:hover { background: #f5f8fc; color: #1d3b6c; }
+    .dropdown-item.active { color: #1d3b6c; font-weight: 600; background: #e8f0fe; }
+
+    /* 主容器 */
+    .main-container {
+      max-width: 1340px;
+      margin: 0 auto;
+      padding: 24px 28px;
+    }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: #1d3b6c;
+      margin-bottom: 20px;
+    }
+
+    /* 策略成效 KPI 指标卡 */
+    .kpi-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .kpi-card {
+      flex: 1;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      padding: 18px 20px;
+      transition: transform .2s, box-shadow .2s;
+      cursor: default;
+    }
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0,0,0,.1);
+    }
+    .kpi-card .kpi-label {
+      font-size: 12px;
+      color: #8c959f;
+      margin-bottom: 6px;
+      white-space: nowrap;
+    }
+    .kpi-card .kpi-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #2c3e50;
+      margin-bottom: 4px;
+    }
+    .kpi-card .kpi-trend {
+      font-size: 12px;
+    }
+    .kpi-trend.up { color: #52c41a; }
+    .kpi-trend.info { color: #5a6872; }
+    .kpi-trend.warn { color: #faad14; }
+    @media (max-width: 900px) {
+      .kpi-row { flex-wrap: wrap; }
+      .kpi-card { flex: 0 0 calc(50% - 8px); }
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .content {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    /* 左侧供应商列表 */
+    .supplier-panel {
+      width: 360px;
+      flex-shrink: 0;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      overflow: hidden;
+      position: sticky;
+      top: 24px;
+    }
+    .supplier-panel h3 {
+      font-size: 15px;
+      color: #1d3b6c;
+      padding: 18px 20px 12px;
+      border-bottom: 1px solid #e8ecf1;
+    }
+    .supplier-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .supplier-table th {
+      text-align: left;
+      padding: 10px 16px;
+      font-size: 12px;
+      color: #8c959f;
+      font-weight: 500;
+      background: #fafbfc;
+      border-bottom: 1px solid #e8ecf1;
+    }
+    .supplier-table td {
+      padding: 13px 16px;
+      font-size: 13px;
+      border-bottom: 1px solid #f0f2f5;
+      color: #2c3e50;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .supplier-table tr:hover td { background: #f5f8fc; }
+    .supplier-table tr.active td { background: #e8f0fe; font-weight: 500; }
+
+    .risk-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .risk-dot.low { background: #52c41a; }
+    .risk-dot.medium { background: #faad14; }
+    .risk-dot.high { background: #ff4d4f; }
+
+    /* 右侧详情区 */
+    .detail-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .detail-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      padding: 24px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1d3b6c;
+      margin-bottom: 18px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e8ecf1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* 风险分头部 */
+    .risk-header {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    .risk-score-big {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .risk-score-big.low { background: #52c41a; }
+    .risk-score-big.medium { background: #faad14; }
+    .risk-score-big.high { background: #ff4d4f; }
+    .risk-score-big .num { font-size: 32px; line-height: 1; }
+    .risk-score-big .label { font-size: 12px; opacity: .9; margin-top: 2px; }
+
+    .supplier-name-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1d3b6c;
+    }
+    .risk-level-tag {
+      display: inline-block;
+      padding: 3px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      margin-top: 6px;
+    }
+    .risk-level-tag.low { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+    .risk-level-tag.medium { background: #fffbe6; color: #d48806; border: 1px solid #ffe58f; }
+    .risk-level-tag.high { background: #fff2f0; color: #ff4d4f; border: 1px solid #ffccc7; }
+
+    /* 雷达图 + 解释 */
+    .detail-row {
+      display: flex;
+      gap: 24px;
+    }
+    .radar-col {
+      width: 380px;
+      flex-shrink: 0;
+    }
+    .radar-col h4, .explain-col h4, .timeline-col h4, .transmission-section h4 {
+      font-size: 14px;
+      color: #1d3b6c;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .explain-col h4 { display: flex; align-items: center; justify-content: space-between; }
+    .ai-config-entry {
+      font-size: 12px;
+      font-weight: 400;
+      color: #8c959f;
+      cursor: pointer;
+      user-select: none;
+      transition: color .2s;
+    }
+    .ai-config-entry:hover { color: #1d3b6c; }
+    .explain-col { flex: 1; }
+    .explain-text {
+      font-size: 13px;
+      color: #5a6872;
+      line-height: 1.6;
+      background: #fafbfc;
+      padding: 16px;
+      border-radius: 8px;
+      border-left: 3px solid #1d3b6c;
+    }
+
+    /* ===== LLM 模型配置弹窗 ===== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-box {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.18);
+      padding: 24px;
+      width: 420px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1d3b6c;
+      margin-bottom: 4px;
+    }
+    .modal-subtitle {
+      font-size: 11px;
+      color: #8c959f;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: #2c3e50;
+      margin-bottom: 6px;
+    }
+    .form-group.row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .form-group.row label { margin-bottom: 0; }
+    .form-input, .form-select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d9dfe5;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #2c3e50;
+      background: #fff;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .form-input:focus, .form-select:focus { border-color: #3b82f6; }
+    .form-range {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .form-range input[type="range"] { flex: 1; }
+    .form-range .range-val { font-size: 13px; color: #2c3e50; min-width: 28px; }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .btn-cancel {
+      padding: 8px 18px;
+      border: 1px solid #d9d9d9;
+      border-radius: 6px;
+      background: #fff;
+      color: #5a6872;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-cancel:hover { border-color: #3b82f6; color: #3b82f6; }
+    .btn-save {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 6px;
+      background: #3b82f6;
+      color: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .btn-save:hover { background: #2563eb; }
+
+    /* Switch 开关 */
+    .switch-wrap {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      cursor: pointer;
+    }
+    .switch-wrap input { display: none; }
+    .switch-slider {
+      position: absolute;
+      inset: 0;
+      background: #d9d9d9;
+      border-radius: 12px;
+      transition: background .2s;
+    }
+    .switch-slider::before {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform .2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,.18);
+    }
+    .switch-wrap input:checked + .switch-slider { background: #3b82f6; }
+    .switch-wrap input:checked + .switch-slider::before { transform: translateX(20px); }
+
+    /* 时间线 */
+    .timeline {
+      position: relative;
+      padding-left: 20px;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 6px;
+      top: 4px;
+      bottom: 4px;
+      width: 2px;
+      background: #e8ecf1;
+    }
+    .timeline-item {
+      position: relative;
+      margin-bottom: 16px;
+      padding-left: 18px;
+    }
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -16px;
+      top: 5px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #fff;
+      border: 2px solid #1d3b6c;
+    }
+    .timeline-item .time { font-size: 12px; color: #8c959f; margin-bottom: 2px; }
+    .timeline-item .event-type {
+      display: inline-block;
+      font-size: 11px;
+      padding: 1px 8px;
+      border-radius: 10px;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+    .event-type.quality { background: #fff2f0; color: #ff4d4f; }
+    .event-type.delivery { background: #fffbe6; color: #d48806; }
+    .event-type.finance { background: #f6ffed; color: #389e0d; }
+    .event-type.public { background: #e6f7ff; color: #1890ff; }
+    .timeline-item .summary {
+      font-size: 13px;
+      color: #2c3e50;
+      line-height: 1.5;
+    }
+
+    /* 断供影响传导 */
+    .transmission-section h4 {
+      font-size: 14px;
+      color: #1d3b6c;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .transmission-row {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+    }
+    .transmission-chart {
+      width: 520px;
+      flex-shrink: 0;
+      background: #fafbfc;
+      border-radius: 8px;
+      border: 1px solid #e8ecf1;
+      padding: 10px;
+      overflow-x: auto;
+    }
+    .transmission-insight {
+      flex: 1;
+      font-size: 13px;
+      color: #5a6872;
+      line-height: 1.8;
+      background: #fafbfc;
+      padding: 16px;
+      border-radius: 8px;
+      border-left: 3px solid #1d3b6c;
+      min-height: 100px;
+      display: flex;
+      align-items: center;
+    }
+
+    /* 配置区域 */
+    .config-section {
+      margin-bottom: 24px;
+    }
+    .config-section:last-child { margin-bottom: 0; }
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1d3b6c;
+      margin-bottom: 12px;
+      padding-left: 10px;
+      border-left: 3px solid #1d3b6c;
+    }
+
+    /* 表格 */
+    .config-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      border: 1px solid #e8ecf1;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .config-table th {
+      background: #fafbfc;
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 500;
+      color: #5a6872;
+      border-bottom: 1px solid #e8ecf1;
+    }
+    .config-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f0f2f5;
+      color: #2c3e50;
+      vertical-align: middle;
+    }
+    .config-table tr:last-child td { border-bottom: none; }
+    .config-table tr:hover td { background: #fafbfc; }
+
+    /* 开关 */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+      cursor: pointer;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      inset: 0;
+      background: #d9d9d9;
+      border-radius: 22px;
+      transition: background .2s;
+    }
+    .slider::before {
+      content: '';
+      position: absolute;
+      left: 2px;
+      top: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform .2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+    }
+    .switch input:checked + .slider { background: #1d3b6c; }
+    .switch input:checked + .slider::before { transform: translateX(18px); }
+    .switch-label { margin-left: 8px; font-size: 13px; color: #2c3e50; }
+
+    /* 表单控件 */
+    .form-row {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 180px;
+    }
+    .form-group.full { width: 100%; }
+    .form-group label {
+      font-size: 12px;
+      color: #5a6872;
+      font-weight: 500;
+    }
+    .form-group input[type="number"],
+    .form-group input[type="text"],
+    .form-group input[type="time"],
+    .form-group select {
+      padding: 7px 10px;
+      border: 1px solid #d9d9d9;
+      border-radius: 5px;
+      font-size: 13px;
+      color: #2c3e50;
+      background: #fff;
+      width: 140px;
+    }
+    .form-group input[type="range"] { width: 200px; accent-color: #1d3b6c; }
+    .range-value-inline {
+      display: inline-block;
+      min-width: 28px;
+      margin-left: 6px;
+      font-weight: 600;
+      color: #1d3b6c;
+    }
+    .checkbox-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-right: 18px;
+      font-size: 13px;
+      color: #2c3e50;
+      cursor: pointer;
+    }
+    .checkbox-inline input { accent-color: #1d3b6c; width: 14px; height: 14px; }
+
+    .radio-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-right: 18px;
+      font-size: 13px;
+      color: #2c3e50;
+      cursor: pointer;
+    }
+    .radio-inline input { accent-color: #1d3b6c; width: 14px; height: 14px; }
+
+    .btn-save {
+      padding: 9px 24px;
+      border: none;
+      border-radius: 6px;
+      background: #1d3b6c;
+      color: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .btn-save:hover { background: #2a5090; }
+    .btn-default {
+      padding: 9px 24px;
+      border: 1px solid #d9d9d9;
+      border-radius: 6px;
+      background: #fff;
+      color: #5a6872;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-default:hover { border-color: #1d3b6c; color: #1d3b6c; }
+
+    /* 告警中心 */
+    .filter-bar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .filter-bar select,
+    .filter-bar input {
+      padding: 7px 10px;
+      border: 1px solid #d9d9d9;
+      border-radius: 5px;
+      font-size: 13px;
+      color: #2c3e50;
+      background: #fff;
+    }
+    .filter-bar input { width: 180px; }
+    .filter-bar .btn-save,
+    .filter-bar .btn-default { padding: 7px 16px; }
+
+    .alert-stats {
+      font-size: 13px;
+      color: #5a6872;
+      margin-bottom: 12px;
+    }
+    .alert-stats b { color: #1d3b6c; }
+    .alert-stats .pending-count { color: #ff4d4f; font-weight: 600; }
+
+    .level-tag {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .level-tag.high { background: #fff2f0; color: #ff4d4f; border: 1px solid #ffccc7; }
+    .level-tag.medium { background: #fffbe6; color: #d48806; border: 1px solid #ffe58f; }
+    .level-tag.low { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+
+    .status-tag {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .status-tag.pending { background: #fff2f0; color: #ff4d4f; }
+    .status-tag.processing { background: #e6f7ff; color: #1890ff; }
+    .status-tag.closed { background: #f0f0f0; color: #8c959f; }
+
+    .action-link {
+      color: #1d3b6c;
+      font-size: 13px;
+      cursor: pointer;
+      margin-right: 10px;
+      text-decoration: none;
+    }
+    .action-link:hover { text-decoration: underline; }
+    .action-link.disabled { color: #8c959f; cursor: not-allowed; }
+
+    /* 分页 */
+    .pagination {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 6px;
+      margin-top: 16px;
+    }
+    .pagination button {
+      min-width: 30px;
+      height: 30px;
+      padding: 0 8px;
+      border: 1px solid #d9d9d9;
+      background: #fff;
+      color: #5a6872;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .pagination button:hover { border-color: #1d3b6c; color: #1d3b6c; }
+    .pagination button.active { background: #1d3b6c; color: #fff; border-color: #1d3b6c; }
+    .pagination button:disabled { cursor: not-allowed; opacity: .5; }
+
+    .config-btn-area {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #8c959f;
+      font-size: 14px;
+    }
+
+    .tips-box {
+      background: #fffbe6;
+      border: 1px solid #ffe58f;
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 12px;
+      color: #8c6d1f;
+      line-height: 1.6;
+      margin-bottom: 18px;
+    }
+    .tips-box ul { margin-left: 16px; }
+    .tips-box li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+  <!-- 顶部导航条 -->
+  <nav class="navbar">
+    <span class="logo">AI供应链决策中枢</span>
+    <a class="nav-link" href="index.html">返回首页</a>
+  </nav>
+
+  <!-- 菜单导航条 -->
+  <div class="menu-bar">
+    <div class="menu-item" id="menuRisk" onclick="toggleMenu('menuRisk')">
+      风险监控 <span class="arrow">▾</span>
+      <div class="dropdown" id="dropdownRisk">
+        <div class="dropdown-item active" data-tab="supplierRisk" onclick="switchTab('supplierRisk', 'menuRisk', event)">供应商断供风险预警</div>
+        <div class="dropdown-item" data-tab="alertCenter" onclick="switchTab('alertCenter', 'menuRisk', event)">告警通知</div>
+      </div>
+    </div>
+    <div class="menu-item" id="menuSettings" onclick="toggleMenu('menuSettings')">
+      系统设置 <span class="arrow">▾</span>
+      <div class="dropdown" id="dropdownSettings">
+        <div class="dropdown-item" data-tab="riskConfig" onclick="switchTab('riskConfig', 'menuSettings', event)">风险监控规则配置</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-container">
+
+    <!-- ==================== Tab 1: 供应商断供风险预警 ==================== -->
+    <div class="tab-panel active" id="tab-supplierRisk">
+      <div class="page-title">供应商断供风险预警</div>
+
+      <div class="kpi-row">
+        <div class="kpi-card" title="统计口径：本月系统自动生成的风险预警总数，含待处理/处理中/已关闭">
+          <div class="kpi-label">本月预警数</div>
+          <div class="kpi-value" id="kpiMonthAlerts">—</div>
+          <div class="kpi-trend info">环比 +6 次</div>
+        </div>
+        <div class="kpi-card" title="命中率 = 预警后确认为中/高风险供应商数 ÷ 预警总数 × 100%；≥80%为优秀">
+          <div class="kpi-label">预警命中率</div>
+          <div class="kpi-value" id="kpiHitRate">—</div>
+          <div class="kpi-trend" id="kpiHitRateTrend">—</div>
+        </div>
+        <div class="kpi-card" title="统计口径：预警触发后，采购团队在评估周期内确认存在断供风险并启动备选方案的供应商数">
+          <div class="kpi-label">提前拦截断供</div>
+          <div class="kpi-value" id="kpiIntercepted">—</div>
+          <div class="kpi-trend info">涉及 <span id="kpiInterceptedSuppliers">—</span> 家核心供应商</div>
+        </div>
+        <div class="kpi-card" title="估算口径：按历史切换供应商成本（寻源+认证+试产）及紧急备货溢价综合估算">
+          <div class="kpi-label">预估避免损失</div>
+          <div class="kpi-value" id="kpiAvoidedLoss" style="color:#1d3b6c;">—</div>
+          <div class="kpi-trend info">按切换/备货成本估算</div>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="supplier-panel">
+          <h3>供应商列表</h3>
+          <table class="supplier-table">
+            <thead>
+              <tr>
+                <th>供应商名称</th>
+                <th>风险分</th>
+                <th>风险等级</th>
+                <th>更新时间</th>
+              </tr>
+            </thead>
+            <tbody id="supplierTableBody">
+              <tr><td colspan="4" class="loading">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="detail-area">
+          <div class="detail-card" id="detailCard">
+            <div class="risk-header" id="riskHeader">
+              <div class="loading">请选择供应商查看详情</div>
+            </div>
+            <div class="detail-row">
+              <div class="radar-col">
+                <h4>风险雷达图</h4>
+                <div id="radarChart" style="width:100%;height:320px;"></div>
+              </div>
+              <div class="explain-col">
+                <h4><span>AI风险分析</span><span class="ai-config-entry" onclick="openAIConfig()">⚙ 模型配置</span></h4>
+                <div class="explain-text" id="explainText">--</div>
+              </div>
+            </div>
+            <!-- 断供影响传导 -->
+            <div class="transmission-section" style="margin-top:20px;">
+              <h4>断供影响传导</h4>
+              <div class="transmission-row">
+                <div class="transmission-chart">
+                  <div id="transmissionChart" style="width:100%;height:320px;"></div>
+                </div>
+                <div class="transmission-insight" id="transmissionInsight">
+                  <div class="loading">--</div>
+                </div>
+              </div>
+            </div>
+            <div class="timeline-col" style="margin-top:20px;">
+              <h4>风险事件时间线</h4>
+              <div class="timeline" id="eventTimeline">
+                <div class="loading">--</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== Tab 2: 告警通知 ==================== -->
+    <div class="tab-panel" id="tab-alertCenter">
+      <div class="page-title">告警通知</div>
+
+      <div class="detail-card">
+        <div class="card-title">
+          <span>告警通知中心</span>
+          <span style="font-size:12px;color:#8c959f;font-weight:400">同步推送至站内消息 / 邮件 / 企业微信</span>
+        </div>
+
+        <div class="filter-bar">
+          <select id="filterStatus">
+            <option value="">全部状态</option>
+            <option value="pending">待处理</option>
+            <option value="processing">处理中</option>
+            <option value="closed">已关闭</option>
+          </select>
+          <select id="filterLevel">
+            <option value="">全部级别</option>
+            <option value="high">高</option>
+            <option value="medium">中</option>
+            <option value="low">低</option>
+          </select>
+          <input type="text" id="filterKeyword" placeholder="供应商 / 规则关键词">
+          <button class="btn-save" onclick="renderAlertList()">查询</button>
+          <button class="btn-default" onclick="resetAlertFilter()">重置</button>
+        </div>
+
+        <div class="alert-stats" id="alertStats"></div>
+
+        <table class="config-table">
+          <thead>
+            <tr>
+              <th style="width:140px">告警时间</th>
+              <th style="width:70px">级别</th>
+              <th style="width:130px">触发规则</th>
+              <th style="width:140px">涉及供应商</th>
+              <th style="width:70px">风险分</th>
+              <th>告警描述</th>
+              <th style="width:80px">状态</th>
+              <th style="width:100px">操作</th>
+            </tr>
+          </thead>
+          <tbody id="alertTableBody"></tbody>
+        </table>
+
+        <div class="pagination" id="alertPagination"></div>
+      </div>
+    </div>
+
+    <!-- ==================== Tab 3: 风险监控规则配置 ==================== -->
+    <div class="tab-panel" id="tab-riskConfig">
+      <div class="page-title">风险监控规则配置</div>
+
+      <div class="detail-card">
+        <div class="tips-box">
+          <ul>
+            <li>以下配置为全局生效，适用于所有已纳入监控的供应商。当任一供应商满足触发规则时，系统将自动生成告警。</li>
+            <li>风险阈值与权重修改后需点击"保存配置"方可生效。</li>
+            <li>告警规则支持自定义扩展，升级策略影响通知对象与审批联动。</li>
+          </ul>
+        </div>
+
+        <!-- 风险阈值设定 -->
+        <div class="config-section">
+          <div class="section-title">风险阈值设定（全量供应商统一）</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>综合风险分阈值（高风险线）</label>
+              <div><input type="range" id="overallThreshold" min="60" max="95" value="80" oninput="document.getElementById('overallThresholdVal').textContent=this.value"><span class="range-value-inline" id="overallThresholdVal">80</span></div>
+            </div>
+            <div class="form-group">
+              <label>中风险线</label>
+              <div><input type="range" id="mediumThreshold" min="40" max="75" value="60" oninput="document.getElementById('mediumThresholdVal').textContent=this.value"><span class="range-value-inline" id="mediumThresholdVal">60</span></div>
+            </div>
+            <div class="form-group">
+              <label>单维度异常阈值</label>
+              <div><input type="range" id="dimensionThreshold" min="60" max="95" value="75" oninput="document.getElementById('dimensionThresholdVal').textContent=this.value"><span class="range-value-inline" id="dimensionThresholdVal">75</span></div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>舆情维度权重</label>
+              <input type="number" id="weightPublic" value="25" min="0" max="100">%
+            </div>
+            <div class="form-group">
+              <label>交付维度权重</label>
+              <input type="number" id="weightDelivery" value="25" min="0" max="100">%
+            </div>
+            <div class="form-group">
+              <label>质量维度权重</label>
+              <input type="number" id="weightQuality" value="25" min="0" max="100">%
+            </div>
+            <div class="form-group">
+              <label>财务维度权重</label>
+              <input type="number" id="weightFinance" value="25" min="0" max="100">%
+            </div>
+          </div>
+        </div>
+
+        <!-- 告警触发规则 -->
+        <div class="config-section">
+          <div class="section-title">告警触发规则（全量供应商统一）</div>
+          <table class="config-table">
+            <thead>
+              <tr>
+                <th style="width:170px">规则名称</th>
+                <th>触发条件</th>
+                <th style="width:90px">告警级别</th>
+                <th style="width:80px">是否启用</th>
+              </tr>
+            </thead>
+            <tbody id="triggerRulesBody"></tbody>
+          </table>
+        </div>
+
+        <!-- 通知与升级策略 -->
+        <div class="config-section">
+          <div class="section-title">通知与升级策略</div>
+          <div class="form-row">
+            <div class="form-group full">
+              <label>告警通知方式</label>
+              <label class="checkbox-inline"><input type="checkbox" id="notifySite" checked> 站内消息</label>
+              <label class="checkbox-inline"><input type="checkbox" id="notifyEmail" checked> 邮件</label>
+              <label class="checkbox-inline"><input type="checkbox" id="notifySMS"> 短信</label>
+              <label class="checkbox-inline"><input type="checkbox" id="notifyWeCom" checked> 企业微信</label>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>通知时段</label>
+              <div style="display:flex;align-items:center;gap:8px">
+                <input type="time" id="notifyStart" value="08:00">
+                <span>至</span>
+                <input type="time" id="notifyEnd" value="20:00">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>告警静默期（分钟）</label>
+              <input type="number" id="silentPeriod" value="30" min="0" step="5">
+            </div>
+            <div class="form-group">
+              <label>升级策略</label>
+              <select id="escalationStrategy">
+                <option value="purchase_manager">仅通知采购经理</option>
+                <option value="supply_director" selected>高风险自动升级供应链总监</option>
+                <option value="both">通知采购经理并抄送总监</option>
+                <option value="workflow">高风险自动触发审批流</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group full">
+              <label>审批联动</label>
+              <label class="radio-inline"><input type="radio" name="approvalLink" value="high" checked> 高风险自动触发审批流</label>
+              <label class="radio-inline"><input type="radio" name="approvalLink" value="all"> 全部告警触发审批</label>
+              <label class="radio-inline"><input type="radio" name="approvalLink" value="none"> 仅记录不审批</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 全局设置 -->
+        <div class="config-section">
+          <div class="section-title">全局设置</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>数据保留天数</label>
+              <input type="number" id="retentionDays" value="365" min="30" max="730">
+            </div>
+            <div class="form-group">
+              <label>评估周期</label>
+              <select id="evalCycle">
+                <option value="realtime">实时</option>
+                <option value="hour" selected>每小时</option>
+                <option value="day">每天</option>
+                <option value="week">每周</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>风险扫描时间</label>
+              <input type="time" id="scanTime" value="09:00">
+            </div>
+          </div>
+        </div>
+
+        <div class="config-btn-area">
+          <button class="btn-default" onclick="resetConfig()">重置</button>
+          <button class="btn-save" onclick="saveConfig()">保存配置</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ==================== 模拟数据 ====================
+    const MOCK_DATA = {
+      'S001': {
+        supplierName: '华强电子有限公司',
+        riskScore: 82, riskLevel: '高风险',
+        dimensions: { 舆情: 72, 交付: 85, 质量: 78, 财务: 90 },
+        explanation: '该供应商近期财务状况出现明显恶化，资产负债率已超过行业警戒线，且近三个月交付准时率持续下降至85%以下。同时，近期舆情监测发现其与主要客户存在合同纠纷，可能影响后续供货稳定性。建议启动备选供应商评估流程，并加强对该供应商的财务监控和交付跟踪。',
+        events: [
+          { time: '2026-08-12', type: 'finance', summary: 'Q2财报显示净利润同比下降42%，现金流持续紧张' },
+          { time: '2026-08-05', type: 'delivery', summary: '连续三批次订单延迟交付，平均延迟5天' },
+          { time: '2026-07-28', type: 'public', summary: '舆情监测：与下游客户发生合同纠纷诉讼' },
+          { time: '2026-07-15', type: 'quality', summary: '本季度质量抽检不合格率上升至3.2%' },
+          { time: '2026-07-01', type: 'finance', summary: '银行授信额度被下调30%，融资能力受限' }
+        ],
+        transmission: {
+          materials: [
+            { name: '电机控制板', products: ['A系列产线', '出口型号B'] },
+            { name: '精密轴承', products: ['A系列产线', 'C系列产线'] },
+            { name: '传感器模块', products: ['出口型号B'] }
+          ],
+          lostAmount: '2,300万元',
+          delayMin: 7, delayMax: 14
+        }
+      },
+      'S002': {
+        supplierName: '瑞丰精密制造股份',
+        riskScore: 55, riskLevel: '低风险',
+        dimensions: { 舆情: 45, 交付: 52, 质量: 58, 财务: 60 },
+        explanation: '该供应商整体运营状况良好，各项指标均处于健康区间。交付准时率稳定在98%以上，质量合格率保持在99.5%以上，财务状况稳健，未发现明显舆情风险。建议维持现有合作模式，按常规频次进行周期性评估。',
+        events: [
+          { time: '2026-08-10', type: 'delivery', summary: '本月所有订单均按时交付，客户满意度评分4.8/5' },
+          { time: '2026-07-20', type: 'quality', summary: '通过ISO 9001年度复审，质量管理体系运行良好' },
+          { time: '2026-06-15', type: 'finance', summary: '获得银行新增授信额度5000万元' },
+          { time: '2026-05-08', type: 'public', summary: '获评市级优秀供应商称号' },
+          { time: '2026-04-01', type: 'delivery', summary: '新增两条自动化产线投入运营' }
+        ],
+        transmission: {
+          materials: [
+            { name: '精密齿轮', products: ['D系列产线', '出口型号A'] },
+            { name: '液压阀体', products: ['D系列产线'] }
+          ],
+          lostAmount: '850万元',
+          delayMin: 3, delayMax: 7
+        }
+      },
+      'S003': {
+        supplierName: '东方新材料科技',
+        riskScore: 68, riskLevel: '中风险',
+        dimensions: { 舆情: 55, 交付: 70, 质量: 65, 财务: 72 },
+        explanation: '该供应商交付和质量指标处于中等水平，但财务指标出现下滑趋势，需密切关注。近两月交付准时率从95%下降至90%，原材料成本上涨对其盈利能力造成一定压力。建议增加对该供应商的交付监控频次，并与采购部门沟通备选方案。',
+        events: [
+          { time: '2026-08-08', type: 'delivery', summary: '本月交付准时率下降至90%，较上月降低3个百分点' },
+          { time: '2026-07-25', type: 'finance', summary: '原材料价格上涨导致毛利率下降5个百分点' },
+          { time: '2026-07-10', type: 'quality', summary: '客户投诉率环比上升15%' },
+          { time: '2026-06-18', type: 'public', summary: '行业展会上发布新产品，市场反响良好' },
+          { time: '2026-05-30', type: 'delivery', summary: '物流合作方变更，短期交付效率受影响' }
+        ],
+        transmission: {
+          materials: [
+            { name: '特种合金板材', products: ['B系列产线', '出口型号C'] },
+            { name: '高分子密封件', products: ['B系列产线', 'E系列产线'] }
+          ],
+          lostAmount: '1,560万元',
+          delayMin: 5, delayMax: 10
+        }
+      },
+      'S004': {
+        supplierName: '中航机电设备集团',
+        riskScore: 91, riskLevel: '高风险',
+        dimensions: { 舆情: 88, 交付: 92, 质量: 85, 财务: 95 },
+        explanation: '该供应商目前处于高度风险状态，多项指标严重超标。生产设备老化导致质量事故频发，近一个月已发生两起重大质量投诉。同时，主要客户流失率超过20%，营收大幅下滑，经营持续性存在重大不确定性。强烈建议立即启动替代供应商切换方案，并通知法务部门评估合同风险。',
+        events: [
+          { time: '2026-08-13', type: 'quality', summary: '重大质量事故：核心部件批量不合格，影响下游生产' },
+          { time: '2026-08-07', type: 'finance', summary: '资金链断裂风险：应付账款逾期超过60天' },
+          { time: '2026-07-30', type: 'public', summary: '被监管部门通报安全生产违规，责令停产整改' },
+          { time: '2026-07-18', type: 'delivery', summary: '主要客户终止合作，订单量锐减50%' },
+          { time: '2026-07-01', type: 'quality', summary: '产品召回事件：已售产品存在设计缺陷' }
+        ],
+        transmission: {
+          materials: [
+            { name: '航空级电机', products: ['A系列产线', '出口型号B', 'F系列产线'] },
+            { name: '精密传感器', products: ['A系列产线', '出口型号B'] },
+            { name: '液压控制系统', products: ['C系列产线', '出口型号B'] }
+          ],
+          lostAmount: '4,800万元',
+          delayMin: 14, delayMax: 30
+        }
+      },
+      'S005': {
+        supplierName: '绿色能源科技股份',
+        riskScore: 42, riskLevel: '低风险',
+        dimensions: { 舆情: 38, 交付: 45, 质量: 40, 财务: 44 },
+        explanation: '该供应商各项指标表现优秀，是当前供应链中最稳定的合作伙伴之一。交付准时率长期维持在99%以上，产品质量稳定，财务状况健康，行业口碑良好。建议继续保持长期战略合作关系，可适当增加采购份额。',
+        events: [
+          { time: '2026-08-11', type: 'delivery', summary: '提前完成本月全部订单交付，交付满意率100%' },
+          { time: '2026-07-22', type: 'finance', summary: '获评AAA级信用企业，融资成本进一步降低' },
+          { time: '2026-06-30', type: 'quality', summary: '通过国际质量体系认证升级审核' },
+          { time: '2026-05-15', type: 'public', summary: '在行业可持续发展论坛上分享绿色制造经验' },
+          { time: '2026-04-10', type: 'delivery', summary: '新仓储物流中心投入使用，配送效率提升30%' }
+        ],
+        transmission: {
+          materials: [
+            { name: '光伏逆变模块', products: ['G系列产线', '出口型号D'] },
+            { name: '储能电池组', products: ['G系列产线'] }
+          ],
+          lostAmount: '620万元',
+          delayMin: 2, delayMax: 5
+        }
+      }
+    };
+
+    // 监控配置初始数据（全局，去除 per-supplier 配置）
+    const DEFAULT_MONITOR_CONFIG = {
+      thresholds: { overall: 80, medium: 60, dimension: 75 },
+      weights: { 舆情: 25, 交付: 25, 质量: 25, 财务: 25 },
+      rules: [
+        { id: 'R01', name: '综合风险分超限', condition: '供应商综合风险分 ≥ 高风险阈值', level: 'high', enabled: true },
+        { id: 'R02', name: '中风险持续告警', condition: '连续3天风险分处于中风险区间', level: 'medium', enabled: true },
+        { id: 'R03', name: '多维度同时异常', condition: '任意两个及以上维度分数 ≥ 单维度异常阈值', level: 'high', enabled: true },
+        { id: 'R04', name: '风险等级跃升', condition: '24小时内风险等级上升两个等级（低→高）', level: 'high', enabled: true },
+        { id: 'R05', name: '重大舆情事件', condition: '监测到负面舆情且舆情维度分数 ≥ 80', level: 'high', enabled: true },
+        { id: 'R06', name: '交付准时率连续下降', condition: '连续4周交付准时率环比下降', level: 'medium', enabled: true },
+        { id: 'R07', name: '财务指标恶化', condition: '资产负债率环比上升10%或现金流为负', level: 'medium', enabled: false },
+        { id: 'R08', name: '非工作时间异常波动', condition: '非工作时段风险分变化超过15分', level: 'low', enabled: false }
+      ],
+      notify: {
+        channels: { site: true, email: true, sms: false, wecom: true },
+        startTime: '08:00', endTime: '20:00', silentPeriod: 30
+      },
+      escalation: 'supply_director',
+      approvalLink: 'high',
+      global: { retentionDays: 365, evalCycle: 'hour', scanTime: '09:00' }
+    };
+
+    // KPI 指标数据（与 MOCK_DATA / MOCK_ALERTS 口径一致）
+    const MOCK_KPI = {
+      monthAlerts: 32,        // 本月预警总数，对应告警中心数据量级
+      hitRate: 84,            // 预警命中率（%），≥80% 绿色
+      intercepted: 3,         // 提前拦截断供次数
+      interceptedSuppliers: 2,// 涉及核心供应商数
+      avoidedLoss: '¥1,850万' // 预估避免损失
+    };
+
+    // LLM 配置
+    let AI_SETTINGS = {
+      enabled: true,
+      model: 'deepseek-chat',
+      temperature: 0.7,
+      maxTokens: 1500,
+      apiKey: ''
+    };
+    let aiRequestSeq = 0;  // 防竞态计数器
+
+    // 告警模拟数据
+    const MOCK_ALERTS = [
+      { id: 'A001', time: '2026-08-14 09:23:15', level: 'high', rule: '综合风险分超限', supplierId: 'S004', supplier: '中航机电设备集团', score: 91, desc: '综合风险分91，已超过高风险阈值80', status: 'pending' },
+      { id: 'A002', time: '2026-08-14 08:45:02', level: 'high', rule: '重大舆情事件', supplierId: 'S004', supplier: '中航机电设备集团', score: 88, desc: '监测到安全生产违规被监管部门通报', status: 'pending' },
+      { id: 'A003', time: '2026-08-13 16:30:44', level: 'medium', rule: '交付准时率连续下降', supplierId: 'S003', supplier: '东方新材料科技', score: 70, desc: '连续4周交付准时率环比下降，当前70分', status: 'processing' },
+      { id: 'A004', time: '2026-08-13 11:12:09', level: 'high', rule: '财务指标恶化', supplierId: 'S001', supplier: '华强电子有限公司', score: 90, desc: 'Q2净利润同比下降42%，财务维度分数90', status: 'pending' },
+      { id: 'A005', time: '2026-08-12 22:15:07', level: 'medium', rule: '非工作时间异常波动', supplierId: 'S001', supplier: '华强电子有限公司', score: 82, desc: '22:15风险分较上一小时上升12分', status: 'closed' },
+      { id: 'A006', time: '2026-08-12 14:20:33', level: 'low', rule: '中风险持续告警', supplierId: 'S003', supplier: '东方新材料科技', score: 68, desc: '风险分连续3天处于中风险区间', status: 'closed' },
+      { id: 'A007', time: '2026-08-11 09:05:18', level: 'high', rule: '多维度同时异常', supplierId: 'S004', supplier: '中航机电设备集团', score: 91, desc: '交付、质量、财务三个维度均超过阈值', status: 'closed' },
+      { id: 'A008', time: '2026-08-10 20:40:51', level: 'high', rule: '风险等级跃升', supplierId: 'S001', supplier: '华强电子有限公司', score: 82, desc: '风险等级由中风险上升至高风险', status: 'processing' },
+      { id: 'A009', time: '2026-08-09 10:11:27', level: 'medium', rule: '质量抽检不合格', supplierId: 'S003', supplier: '东方新材料科技', score: 65, desc: '客户投诉率环比上升15%', status: 'closed' },
+      { id: 'A010', time: '2026-08-08 15:55:39', level: 'low', rule: '舆情小幅波动', supplierId: 'S002', supplier: '瑞丰精密制造股份', score: 55, desc: '舆情维度分数小幅上升至55，仍在安全区间', status: 'closed' },
+      { id: 'A011', time: '2026-08-07 08:30:12', level: 'high', rule: '综合风险分超限', supplierId: 'S001', supplier: '华强电子有限公司', score: 82, desc: '综合风险分82，超过高风险阈值', status: 'closed' },
+      { id: 'A012', time: '2026-08-06 13:18:45', level: 'medium', rule: '财务指标恶化', supplierId: 'S003', supplier: '东方新材料科技', score: 72, desc: '原材料价格上涨导致毛利率下降', status: 'closed' }
+    ];
+
+    // ==================== 全局状态 ====================
+    let currentSupplierId = 'S001';
+    let radarChart = null;
+    let transmissionChart = null;
+    let monitorConfig = JSON.parse(JSON.stringify(DEFAULT_MONITOR_CONFIG));
+    let alertList = JSON.parse(JSON.stringify(MOCK_ALERTS));
+    let alertPage = 1;
+    const ALERT_PAGE_SIZE = 5;
+    let currentTab = 'supplierRisk';
+
+    // ==================== 初始化 ====================
+    document.addEventListener('DOMContentLoaded', () => {
+      renderKPI();
+      renderSupplierTable();
+      selectSupplier('S001');
+      renderMonitorConfig();
+      renderAlertList();
+    });
+
+    window.addEventListener('resize', () => {
+      if (radarChart) radarChart.resize();
+      if (transmissionChart) transmissionChart.resize();
+    });
+
+    // 点击页面空白处关闭下拉菜单
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.menu-item')) {
+        document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('show'));
+        document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('open'));
+      }
+    });
+
+    // ==================== 菜单与 Tab 切换 ====================
+    function toggleMenu(menuId) {
+      const menu = document.getElementById(menuId);
+      const dropdown = menu.querySelector('.dropdown');
+      const isOpen = dropdown.classList.contains('show');
+
+      // 关闭所有其他下拉
+      document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('show'));
+      document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('open'));
+
+      if (!isOpen) {
+        dropdown.classList.add('show');
+        menu.classList.add('open');
+      }
+    }
+
+    function switchTab(tabId, menuId, event) {
+      event.stopPropagation();
+
+      // 更新 Tab 面板
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('tab-' + tabId).classList.add('active');
+
+      // 更新菜单高亮
+      document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+      document.getElementById(menuId).classList.add('active');
+
+      // 更新下拉项高亮
+      const menu = document.getElementById(menuId);
+      menu.querySelectorAll('.dropdown-item').forEach(d => d.classList.remove('active'));
+      menu.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+
+      // 关闭下拉
+      menu.querySelector('.dropdown').classList.remove('show');
+      menu.classList.remove('open');
+
+      currentTab = tabId;
+
+      // 切换到雷达图相关 Tab 时重新 resize
+      if (tabId === 'supplierRisk' && radarChart) {
+        setTimeout(() => radarChart.resize(), 100);
+      }
+      if (tabId === 'supplierRisk' && transmissionChart) {
+        setTimeout(() => transmissionChart.resize(), 100);
+      }
+    }
+
+    // ==================== 供应商列表与详情 ====================
+    function renderSupplierTable() {
+      const tbody = document.getElementById('supplierTableBody');
+      const suppliers = Object.entries(MOCK_DATA);
+      tbody.innerHTML = suppliers.map(([id, data]) => {
+        const riskClass = getRiskClass(data.riskScore);
+        return `
+          <tr data-id="${id}" class="${id === currentSupplierId ? 'active' : ''}" onclick="selectSupplier('${id}')">
+            <td>${data.supplierName}</td>
+            <td><span class="risk-dot ${riskClass}"></span>${data.riskScore}</td>
+            <td><span class="risk-level-tag ${riskClass}">${data.riskLevel}</span></td>
+            <td>${data.events[0].time}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function selectSupplier(supplierId) {
+      currentSupplierId = supplierId;
+      document.querySelectorAll('.supplier-table tbody tr').forEach(tr => {
+        tr.classList.toggle('active', tr.dataset.id === supplierId);
+      });
+
+      const data = await fetchSupplierRisk(supplierId);
+      if (!data) return;
+
+      renderRiskHeader(data);
+      renderRadarChart(data.dimensions);
+      renderTransmissionChart(data);
+      renderTransmissionText(data);
+      loadAIExplanation(data);
+      renderEventTimeline(data.events);
+    }
+
+    function renderRiskHeader(data) {
+      const riskClass = getRiskClass(data.riskScore);
+      const header = document.getElementById('riskHeader');
+      header.innerHTML = `
+        <div class="risk-score-big ${riskClass}">
+          <span class="num">${data.riskScore}</span>
+          <span class="label">风险分</span>
+        </div>
+        <div>
+          <div class="supplier-name-title">${data.supplierName}</div>
+          <span class="risk-level-tag ${riskClass}">${data.riskLevel}</span>
+        </div>
+      `;
+    }
+
+    function renderRadarChart(dimensions) {
+      const dom = document.getElementById('radarChart');
+      if (radarChart) radarChart.dispose();
+      radarChart = echarts.init(dom);
+      const dims = Object.keys(dimensions);
+      const values = Object.values(dimensions);
+      const option = {
+        tooltip: { trigger: 'item', formatter: (params) => `${params.name}: ${params.value} 分` },
+        radar: {
+          center: ['50%', '50%'],
+          radius: '70%',
+          indicator: dims.map(name => ({ name, max: 100, color: '#5a6872' })),
+          axisName: { fontSize: 12, color: '#5a6872' },
+          splitArea: {
+            areaStyle: {
+              color: ['rgba(29,59,108,.02)', 'rgba(29,59,108,.02)',
+                      'rgba(29,59,108,.04)', 'rgba(29,59,108,.04)',
+                      'rgba(29,59,108,.06)']
+            }
+          }
+        },
+        series: [{
+          type: 'radar',
+          data: [{ value: values, name: '风险评分' }],
+          symbol: 'circle', symbolSize: 5,
+          lineStyle: { color: '#1d3b6c', width: 2 },
+          areaStyle: { color: 'rgba(29,59,108,.12)' },
+          itemStyle: { color: '#1d3b6c', borderColor: '#fff', borderWidth: 2 }
+        }]
+      };
+      radarChart.setOption(option);
+    }
+
+    function renderExplanation(text) {
+      const el = document.getElementById('explainText');
+      el.innerHTML = text.replace(/\*\*/g, '').replace(/\(全文[^)]*\)/g, '').replace(/（全文[^）]*）/g, '');
+    }
+
+    // ==================== AI 风险分析：Prompt 构造 ====================
+    function buildRiskPrompt(supplierData) {
+      const payload = {
+        supplierName: supplierData.supplierName,
+        riskScore: supplierData.riskScore,
+        riskLevel: supplierData.riskLevel,
+        dimensions: supplierData.dimensions,
+        events: supplierData.events
+      };
+      return `你是资深供应链风险分析专家。请基于以下供应商数据，生成一段风险分析。
+要求：
+- 先给结论：当前风险等级和核心风险来源
+- 再分析：指出得分最高的一到两个维度，说明可能原因
+- 最后给处置建议：2~3 条可执行的行动项
+- 语气专业、简洁，全文不超过 300 字，用中文
+- 不要编造数据里没有的信息
+
+供应商数据如下（JSON）：
+${JSON.stringify(payload)}`;
+    }
+
+    // ==================== 兜底降级模板 ====================
+    function buildFallbackExplanation(supplierData) {
+      const dims = Object.entries(supplierData.dimensions);
+      dims.sort((a, b) => b[1] - a[1]);
+      const topDim = dims[0];
+      const secondDim = dims[1] || ['', 0];
+
+      const adviceMap = {
+        '财务': '建议加强财务监控，评估账期与授信风险，并同步启动备选供应商评估流程。',
+        '交付': '建议增加交付监控频次，与采购部门沟通安全库存与备选货源，避免断供。',
+        '质量': '建议加强来料质检频次，暂停新增订单并评估已交付批次的质量风险。',
+        '舆情': '建议持续跟踪负面舆情发酵情况，评估合同与合规风险，必要时通知法务部门介入。'
+      };
+      const advice = adviceMap[topDim[0]] || '建议综合评估供应商风险，制定替代方案。';
+
+      let eventLines = '';
+      const evts = supplierData.events || [];
+      const showCount = Math.min(evts.length, 2);
+      for (let i = 0; i < showCount; i++) {
+        eventLines += `\n· ${evts[i].summary}（${evts[i].time}）`;
+      }
+
+      return `${supplierData.supplierName}当前综合风险分 ${supplierData.riskScore} 分，处于${supplierData.riskLevel}状态。从四维评估看，${topDim[0]}维度得分最高（${topDim[1]} 分），是主要风险来源；${secondDim[0]}维度次之（${secondDim[1]} 分）。${eventLines ? '\n近期关键事件：' + eventLines : ''}
+
+处置建议：${advice}
+
+<span style="color:#8c959f;font-size:11px;">（离线降级模式 · 数据自动拼接）</span>`;
+    }
+
+    // ==================== 异步加载 AI 分析 ====================
+    async function loadAIExplanation(supplierData) {
+      const el = document.getElementById('explainText');
+      el.innerHTML = '<span style="color:#8c959f;">AI 分析中...</span>';
+
+      aiRequestSeq++;
+      const mySeq = aiRequestSeq;
+
+      // 降级条件：未启用或未配置 API Key
+      if (!AI_SETTINGS.enabled || !AI_SETTINGS.apiKey) {
+        renderExplanation(buildFallbackExplanation(supplierData));
+        return;
+      }
+
+      try {
+        const resp = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + AI_SETTINGS.apiKey
+          },
+          body: JSON.stringify({
+            model: AI_SETTINGS.model,
+            messages: [
+              { role: 'system', content: '你是资深供应链风险分析专家，擅长从多维指标和事件中提炼断供风险并给出处置建议。' },
+              { role: 'user', content: buildRiskPrompt(supplierData) }
+            ],
+            temperature: AI_SETTINGS.temperature,
+            max_tokens: AI_SETTINGS.maxTokens,
+            stream: false
+          })
+        });
+
+        const json = await resp.json();
+        if (mySeq !== aiRequestSeq) return;  // 竞态：用户已切换供应商，丢弃
+
+        const content = json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
+        if (content) {
+          renderExplanation(content.replace(/\n/g, '<br>'));
+        } else {
+          renderExplanation(buildFallbackExplanation(supplierData));
+        }
+      } catch (e) {
+        if (mySeq !== aiRequestSeq) return;
+        console.warn('LLM 调用失败，降级为模板拼接:', e.message);
+        renderExplanation(buildFallbackExplanation(supplierData));
+      }
+    }
+
+    // ==================== 模型配置弹窗 ====================
+    function openAIConfig() {
+      document.getElementById('cfgEnabled').checked = AI_SETTINGS.enabled;
+      document.getElementById('cfgModel').value = AI_SETTINGS.model;
+      document.getElementById('cfgTemperature').value = AI_SETTINGS.temperature;
+      document.getElementById('cfgTemperatureVal').textContent = AI_SETTINGS.temperature;
+      document.getElementById('cfgMaxTokens').value = AI_SETTINGS.maxTokens;
+      document.getElementById('cfgApiKey').value = AI_SETTINGS.apiKey;
+      document.getElementById('aiConfigModal').classList.add('show');
+
+      // 滑块联动
+      document.getElementById('cfgTemperature').oninput = function() {
+        document.getElementById('cfgTemperatureVal').textContent = this.value;
+      };
+    }
+
+    function closeAIConfig() {
+      document.getElementById('aiConfigModal').classList.remove('show');
+    }
+
+    function saveAIConfig() {
+      AI_SETTINGS.enabled = document.getElementById('cfgEnabled').checked;
+      AI_SETTINGS.model = document.getElementById('cfgModel').value;
+      AI_SETTINGS.temperature = parseFloat(document.getElementById('cfgTemperature').value);
+      AI_SETTINGS.maxTokens = parseInt(document.getElementById('cfgMaxTokens').value) || 1500;
+      AI_SETTINGS.apiKey = document.getElementById('cfgApiKey').value.trim();
+      console.log('AI_SETTINGS 已保存:', AI_SETTINGS);
+      closeAIConfig();
+
+      // 如果有当前选中供应商，重新生成分析
+      if (currentSupplierId) {
+        const data = MOCK_DATA[currentSupplierId];
+        if (data) loadAIExplanation(data);
+      }
+    }
+
+    function renderEventTimeline(events) {
+      const typeMap = { finance: '财务', delivery: '交付', quality: '质量', public: '舆情' };
+      const timeline = document.getElementById('eventTimeline');
+      timeline.innerHTML = events.map(e => `
+        <div class="timeline-item">
+          <div class="time">${e.time}</div>
+          <span class="event-type ${e.type}">${typeMap[e.type] || e.type}</span>
+          <div class="summary">${e.summary}</div>
+        </div>
+      `).join('');
+    }
+
+    function getRiskClass(score) {
+      if (score < 60) return 'low';
+      if (score <= 80) return 'medium';
+      return 'high';
+    }
+
+    // ==================== 断供影响传导 ====================
+    function renderTransmissionChart(data) {
+      const dom = document.getElementById('transmissionChart');
+      if (transmissionChart) {
+        transmissionChart.dispose();
+        transmissionChart = null;
+      }
+      const existing = echarts.getInstanceByDom(dom);
+      if (existing) existing.dispose();
+      dom.innerHTML = '';
+
+      const tm = data.transmission;
+      if (!tm) { dom.innerHTML = '<div class="loading">暂无传导数据</div>'; return; }
+
+      transmissionChart = echarts.init(dom);
+
+      // 统一使用浅灰色连线，降低视觉干扰
+      const lineColor = '#d1d5db';
+      const lineWidth = 1.5;
+      const lineGlow = {};
+
+      // 收集并去重产品线
+      const productSet = new Set();
+      tm.materials.forEach(m => m.products.forEach(p => productSet.add(p)));
+      const products = Array.from(productSet);
+
+      // 容器尺寸
+      const W = dom.clientWidth || 500;
+      const H = dom.clientHeight || 320;
+      const paddingX = 56;  // 左右边距
+      const usableW = W - paddingX * 2;
+
+      const nodes = [];
+      const links = [];
+
+      // 通用 label 白底样式
+      const labelBg = {
+        backgroundColor: 'rgba(255,255,255,0.92)',
+        padding: [2, 5],
+        borderRadius: 3,
+        borderWidth: 0.5,
+        borderColor: '#d9d9d9'
+      };
+
+      // 垂直方向：供应商在下、物料在中、产品线在上
+      const ySupplier = H * 0.84;
+      const yMaterial = H * 0.52;
+      const yProduct  = H * 0.16;
+
+      // 辅助函数：在可用宽度内均匀分布 x
+      function spreadX(count, index) {
+        if (count === 1) return W / 2;
+        const step = usableW / (count - 1);
+        return paddingX + step * index;
+      }
+
+      // 供应商节点
+      nodes.push({
+        id: 'supplier',
+        name: data.supplierName,
+        symbolSize: 28,
+        x: W / 2, y: ySupplier,
+        category: 0,
+        label: { show: true, fontSize: 12, fontWeight: 600, color: '#1d3b6c', position: 'bottom', distance: 6, ...labelBg }
+      });
+
+      // 物料节点
+      const matCount = tm.materials.length;
+      tm.materials.forEach((m, i) => {
+        const nodeId = 'mat_' + i;
+        const x = spreadX(matCount, i);
+        nodes.push({
+          id: nodeId,
+          name: m.name,
+          symbolSize: 24,
+          x, y: yMaterial,
+          category: 1,
+          label: { show: true, fontSize: 11, color: '#2c3e50', position: 'bottom', distance: 5, ...labelBg }
+        });
+        links.push({
+          source: 'supplier', target: nodeId,
+          lineStyle: { color: lineColor, width: lineWidth, curveness: 0.15, ...lineGlow }
+        });
+      });
+
+      // 产品线节点（去重后水平分布）
+      products.forEach((p, i) => {
+        const prodId = 'prod_' + p.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_');
+        const x = spreadX(products.length, i);
+        nodes.push({
+          id: prodId,
+          name: p,
+          symbolSize: 20,
+          x, y: yProduct,
+          category: 2,
+          label: { show: true, fontSize: 11, color: '#2c3e50', position: 'top', distance: 5, ...labelBg }
+        });
+      });
+
+      // 建立物料到产品线的连线
+      tm.materials.forEach((m, i) => {
+        const nodeId = 'mat_' + i;
+        m.products.forEach(p => {
+          const prodId = 'prod_' + p.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_');
+          links.push({
+            source: nodeId, target: prodId,
+            lineStyle: { color: lineColor, width: lineWidth, curveness: 0.15, ...lineGlow }
+          });
+        });
+      });
+
+      const option = {
+        legend: {
+          data: ['供应商', '关键物料', '产品线'],
+          bottom: -4,
+          left: 'center',
+          orient: 'horizontal',
+          textStyle: { fontSize: 11, color: '#5a6872' },
+          itemWidth: 10, itemHeight: 10,
+          itemGap: 16
+        },
+        tooltip: {
+          trigger: 'item',
+          formatter: (params) => {
+            if (params.dataType === 'edge' || !params.data) return '';
+            const name = params.name;
+            const cat = params.data.category;
+            if (cat === 0) return `${name}<br/>类型：供应商`;
+            if (cat === 1) return `${name}<br/>类型：关键物料<br/>供应该物料的供应商：${data.supplierName}`;
+            if (cat === 2) return `${name}<br/>类型：产品线<br/>受影响预计延迟${tm.delayMin}-${tm.delayMax}天，涉及金额约${tm.lostAmount}`;
+            return name;
+          }
+        },
+        animationDuration: 500,
+        series: [{
+          type: 'graph',
+          layout: 'none',
+          roam: false,
+          draggable: false,
+          categories: [
+            { name: '供应商', itemStyle: { color: '#1d3b6c' } },
+            { name: '关键物料', itemStyle: { color: '#3b82f6' } },
+            { name: '产品线', itemStyle: { color: '#f59e0b' } }
+          ],
+          data: nodes,
+          links: links,
+          edgeSymbol: ['none', 'arrow'],
+          edgeSymbolSize: 7,
+          lineStyle: { color: '#d1d5db', width: 1.5, curveness: 0.15 },
+          emphasis: {
+            focus: 'adjacency',
+            lineStyle: { width: 3 }
+          }
+        }]
+      };
+      transmissionChart.setOption(option);
+    }
+
+    function renderTransmissionText(data) {
+      const tm = data.transmission;
+      const insight = document.getElementById('transmissionInsight');
+      if (!tm) { insight.innerHTML = '<div class="loading">暂无传导数据</div>'; return; }
+      const productSet = new Set();
+      tm.materials.forEach(m => m.products.forEach(p => productSet.add(p)));
+      const productList = Array.from(productSet);
+      const materialNames = tm.materials.map(m => m.name).join('】、【');
+      const productNames = productList.join('】、【');
+      insight.innerHTML = `若【${data.supplierName}】断供，将影响【${materialNames}】等${tm.materials.length}种关键物料，波及【${productNames}】等${productList.length}条产品线，预计延迟交付${tm.delayMin}-${tm.delayMax}天，涉及订单金额约${tm.lostAmount}，建议同步启动备选供应商评估。`;
+    }
+
+    // ==================== API 调用（模拟 + 扣子预留） ====================
+    async function fetchSupplierRisk(supplierId) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      if (MOCK_DATA[supplierId]) return MOCK_DATA[supplierId];
+      return null;
+
+      // ========== 扣子工作流API调用（预留） ==========
+      // const COZE_CONFIG = {
+      //   workflowId: 'YOUR_WORKFLOW_ID',
+      //   token: 'YOUR_PERSONAL_ACCESS_TOKEN',
+      //   baseUrl: 'https://api.coze.cn/v1/workflow/run'
+      // };
+      // try {
+      //   const response = await fetch(COZE_CONFIG.baseUrl, {
+      //     method: 'POST',
+      //     headers: {
+      //       'Authorization': `Bearer ${COZE_CONFIG.token}`,
+      //       'Content-Type': 'application/json'
+      //     },
+      //     body: JSON.stringify({
+      //       workflow_id: COZE_CONFIG.workflowId,
+      //       parameters: { supplier_id: supplierId }
+      //     })
+      //   });
+      //   if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      //   const result = await response.json();
+      //   const rawData = result.data;
+      //   if (rawData && typeof rawData === 'string') return JSON.parse(rawData);
+      //   return rawData;
+      // } catch (error) {
+      //   console.error('获取供应商风险数据失败:', error);
+      //   return null;
+      // }
+    }
+
+    // ==================== 监控规则配置 ====================
+    function renderMonitorConfig() {
+      // 阈值与权重
+      document.getElementById('overallThreshold').value = monitorConfig.thresholds.overall;
+      document.getElementById('overallThresholdVal').textContent = monitorConfig.thresholds.overall;
+      document.getElementById('mediumThreshold').value = monitorConfig.thresholds.medium;
+      document.getElementById('mediumThresholdVal').textContent = monitorConfig.thresholds.medium;
+      document.getElementById('dimensionThreshold').value = monitorConfig.thresholds.dimension;
+      document.getElementById('dimensionThresholdVal').textContent = monitorConfig.thresholds.dimension;
+      document.getElementById('weightPublic').value = monitorConfig.weights.舆情;
+      document.getElementById('weightDelivery').value = monitorConfig.weights.交付;
+      document.getElementById('weightQuality').value = monitorConfig.weights.质量;
+      document.getElementById('weightFinance').value = monitorConfig.weights.财务;
+
+      // 触发规则
+      const rulesBody = document.getElementById('triggerRulesBody');
+      rulesBody.innerHTML = monitorConfig.rules.map(r => `
+        <tr>
+          <td>${r.name}</td>
+          <td style="color:#5a6872">${r.condition}</td>
+          <td><span class="level-tag ${r.level}">${r.level === 'high' ? '高' : r.level === 'medium' ? '中' : '低'}</span></td>
+          <td>${renderSwitch(`ruleEnabled_${r.id}`, r.enabled, `toggleRuleEnabled('${r.id}')`)}</td>
+        </tr>
+      `).join('');
+
+      // 通知与升级
+      document.getElementById('notifySite').checked = monitorConfig.notify.channels.site;
+      document.getElementById('notifyEmail').checked = monitorConfig.notify.channels.email;
+      document.getElementById('notifySMS').checked = monitorConfig.notify.channels.sms;
+      document.getElementById('notifyWeCom').checked = monitorConfig.notify.channels.wecom;
+      document.getElementById('notifyStart').value = monitorConfig.notify.startTime;
+      document.getElementById('notifyEnd').value = monitorConfig.notify.endTime;
+      document.getElementById('silentPeriod').value = monitorConfig.notify.silentPeriod;
+      document.getElementById('escalationStrategy').value = monitorConfig.escalation;
+      document.querySelector(`input[name="approvalLink"][value="${monitorConfig.approvalLink}"]`).checked = true;
+
+      // 全局设置
+      document.getElementById('retentionDays').value = monitorConfig.global.retentionDays;
+      document.getElementById('evalCycle').value = monitorConfig.global.evalCycle;
+      document.getElementById('scanTime').value = monitorConfig.global.scanTime;
+    }
+
+    function renderSwitch(id, checked, onchange) {
+      return `
+        <label class="switch" for="${id}">
+          <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} onchange="${onchange}">
+          <span class="slider"></span>
+        </label>
+        <span class="switch-label">${checked ? '开启' : '关闭'}</span>
+      `;
+    }
+
+    function toggleRuleEnabled(ruleId) {
+      const r = monitorConfig.rules.find(x => x.id === ruleId);
+      if (r) r.enabled = !r.enabled;
+      renderMonitorConfig();
+    }
+
+    function saveConfig() {
+      const totalWeight = ['weightPublic','weightDelivery','weightQuality','weightFinance']
+        .reduce((sum, id) => sum + (parseInt(document.getElementById(id).value) || 0), 0);
+      if (totalWeight !== 100) {
+        alert(`维度权重之和必须为100%，当前为 ${totalWeight}%`);
+        return;
+      }
+      monitorConfig = {
+        thresholds: {
+          overall: parseInt(document.getElementById('overallThreshold').value),
+          medium: parseInt(document.getElementById('mediumThreshold').value),
+          dimension: parseInt(document.getElementById('dimensionThreshold').value)
+        },
+        weights: {
+          舆情: parseInt(document.getElementById('weightPublic').value) || 0,
+          交付: parseInt(document.getElementById('weightDelivery').value) || 0,
+          质量: parseInt(document.getElementById('weightQuality').value) || 0,
+          财务: parseInt(document.getElementById('weightFinance').value) || 0
+        },
+        rules: monitorConfig.rules.map(r => ({ ...r })),
+        notify: {
+          channels: {
+            site: document.getElementById('notifySite').checked,
+            email: document.getElementById('notifyEmail').checked,
+            sms: document.getElementById('notifySMS').checked,
+            wecom: document.getElementById('notifyWeCom').checked
+          },
+          startTime: document.getElementById('notifyStart').value,
+          endTime: document.getElementById('notifyEnd').value,
+          silentPeriod: parseInt(document.getElementById('silentPeriod').value) || 0
+        },
+        escalation: document.getElementById('escalationStrategy').value,
+        approvalLink: document.querySelector('input[name="approvalLink"]:checked').value,
+        global: {
+          retentionDays: parseInt(document.getElementById('retentionDays').value) || 365,
+          evalCycle: document.getElementById('evalCycle').value,
+          scanTime: document.getElementById('scanTime').value
+        }
+      };
+      console.log('风险监控规则配置已保存:', JSON.stringify(monitorConfig, null, 2));
+      alert('配置已保存（请查看控制台输出）');
+    }
+
+    function resetConfig() {
+      monitorConfig = JSON.parse(JSON.stringify(DEFAULT_MONITOR_CONFIG));
+      renderMonitorConfig();
+    }
+
+    // ==================== KPI 指标卡 ====================
+    function renderKPI() {
+      const kpi = MOCK_KPI;
+      document.getElementById('kpiMonthAlerts').textContent = kpi.monthAlerts + ' 次';
+      document.getElementById('kpiHitRate').textContent = kpi.hitRate + '%';
+      document.getElementById('kpiIntercepted').textContent = kpi.intercepted + ' 次';
+      document.getElementById('kpiInterceptedSuppliers').textContent = kpi.interceptedSuppliers;
+      document.getElementById('kpiAvoidedLoss').textContent = kpi.avoidedLoss;
+
+      // 命中率颜色
+      const hitRate = kpi.hitRate;
+      const hitRateEl = document.getElementById('kpiHitRate');
+      const hitRateTrend = document.getElementById('kpiHitRateTrend');
+      if (hitRate >= 80) {
+        hitRateEl.style.color = '#52c41a';
+        hitRateTrend.className = 'kpi-trend up';
+        hitRateTrend.textContent = '较上月 +2.1%';
+      } else if (hitRate >= 60) {
+        hitRateEl.style.color = '#faad14';
+        hitRateTrend.className = 'kpi-trend warn';
+        hitRateTrend.textContent = '较上月 +0.5%';
+      } else {
+        hitRateEl.style.color = '#ff4d4f';
+        hitRateTrend.className = 'kpi-trend up';
+        hitRateTrend.style.color = '#ff4d4f';
+        hitRateTrend.textContent = '较上月 -1.8%';
+      }
+    }
+
+    function renderAlertList() {
+      const status = document.getElementById('filterStatus').value;
+      const level = document.getElementById('filterLevel').value;
+      const keyword = document.getElementById('filterKeyword').value.trim().toLowerCase();
+
+      let filtered = alertList.filter(a => {
+        if (status && a.status !== status) return false;
+        if (level && a.level !== level) return false;
+        if (keyword && !a.supplier.toLowerCase().includes(keyword) && !a.rule.toLowerCase().includes(keyword) && !a.desc.toLowerCase().includes(keyword)) return false;
+        return true;
+      });
+
+      const pendingCount = filtered.filter(a => a.status === 'pending').length;
+      document.getElementById('alertStats').innerHTML =
+        `共 <b>${filtered.length}</b> 条告警（待处理 <span class="pending-count">${pendingCount}</span> 条）`;
+
+      const totalPages = Math.max(1, Math.ceil(filtered.length / ALERT_PAGE_SIZE));
+      if (alertPage > totalPages) alertPage = totalPages;
+      const start = (alertPage - 1) * ALERT_PAGE_SIZE;
+      const pageData = filtered.slice(start, start + ALERT_PAGE_SIZE);
+
+      const levelText = { high: '高', medium: '中', low: '低' };
+      const statusText = { pending: '待处理', processing: '处理中', closed: '已关闭' };
+      const tbody = document.getElementById('alertTableBody');
+      if (pageData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="loading">暂无告警数据</td></tr>`;
+      } else {
+        tbody.innerHTML = pageData.map(a => `
+          <tr>
+            <td>${a.time}</td>
+            <td><span class="level-tag ${a.level}">${levelText[a.level]}</span></td>
+            <td>${a.rule}</td>
+            <td>${a.supplier}</td>
+            <td>${a.score}</td>
+            <td>${a.desc}</td>
+            <td><span class="status-tag ${a.status}">${statusText[a.status]}</span></td>
+            <td>
+              ${a.status === 'pending' ? `<a class="action-link" onclick="handleAlert('${a.id}', 'processing')">处理</a>` : ''}
+              ${a.status !== 'closed' ? `<a class="action-link" onclick="handleAlert('${a.id}', 'closed')">关闭</a>` : ''}
+              ${a.status === 'closed' ? '<span class="action-link disabled">已关闭</span>' : ''}
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      renderPagination(totalPages);
+    }
+
+    function renderPagination(totalPages) {
+      const pager = document.getElementById('alertPagination');
+      let html = `<button onclick="changeAlertPage(${alertPage - 1})" ${alertPage === 1 ? 'disabled' : ''}>«</button>`;
+      for (let i = 1; i <= totalPages; i++) {
+        html += `<button class="${i === alertPage ? 'active' : ''}" onclick="changeAlertPage(${i})">${i}</button>`;
+      }
+      html += `<button onclick="changeAlertPage(${alertPage + 1})" ${alertPage === totalPages ? 'disabled' : ''}>»</button>`;
+      pager.innerHTML = html;
+    }
+
+    function changeAlertPage(page) {
+      alertPage = page;
+      renderAlertList();
+    }
+
+    function handleAlert(alertId, newStatus) {
+      const a = alertList.find(x => x.id === alertId);
+      if (a) {
+        a.status = newStatus;
+        console.log(`告警 ${alertId} 状态更新为: ${newStatus}`);
+        renderAlertList();
+      }
+    }
+
+    function resetAlertFilter() {
+      document.getElementById('filterStatus').value = '';
+      document.getElementById('filterLevel').value = '';
+      document.getElementById('filterKeyword').value = '';
+      alertPage = 1;
+      renderAlertList();
+    }
+  </script>
+<!-- ==================== LLM 模型配置弹窗 ==================== -->
+  <div class="modal-overlay" id="aiConfigModal" onclick="if(event.target===this)closeAIConfig()">
+    <div class="modal-box">
+      <div class="modal-title">LLM 模型配置</div>
+      <div class="modal-subtitle">仅供展示使用，配置仅当前页面生效</div>
+      <div class="form-group row">
+        <label>启用 LLM 生成</label>
+        <label class="switch-wrap">
+          <input type="checkbox" id="cfgEnabled" checked>
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label>模型选择</label>
+        <select class="form-select" id="cfgModel">
+          <option value="deepseek-chat" selected>deepseek-chat</option>
+          <option value="deepseek-reasoner">deepseek-reasoner</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Temperature</label>
+        <div class="form-range">
+          <input type="range" id="cfgTemperature" min="0" max="1" step="0.1" value="0.7">
+          <span class="range-val" id="cfgTemperatureVal">0.7</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>最大输出 tokens</label>
+        <input type="number" class="form-input" id="cfgMaxTokens" min="200" max="4000" value="1500">
+      </div>
+      <div class="form-group">
+        <label>API Key</label>
+        <input type="password" class="form-input" id="cfgApiKey" placeholder="留空则使用内置降级模板">
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeAIConfig()">取消</button>
+        <button class="btn-save" onclick="saveAIConfig()">保存</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

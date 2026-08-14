@@ -1,0 +1,1212 @@
+<!-- 文件名：demand_forecast.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI供应链决策中枢 - 需求预测与动态补货</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: #f0f2f5;
+      color: #141414;
+      min-height: 100vh;
+    }
+
+    /* 导航条 */
+    .navbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1d3b6c;
+      color: #fff;
+      padding: 0 32px;
+      height: 52px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    }
+    .navbar .logo { font-size: 17px; font-weight: 600; letter-spacing: .5px; }
+    .navbar .nav-link { color: #c8daf5; text-decoration: none; font-size: 14px; transition: color .2s; }
+    .navbar .nav-link:hover { color: #fff; }
+    .navbar .nav-right { display: flex; align-items: center; gap: 16px; }
+    .btn-upload-data {
+      background: rgba(255,255,255,.15);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,.25);
+      padding: 5px 14px;
+      border-radius: 5px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-upload-data:hover { background: rgba(255,255,255,.25); }
+    .btn-upload-data.uploaded { background: #22c55e; border-color: #22c55e; }
+    .upload-hint { font-size: 10px; color: rgba(255,255,255,.45); text-align: center; margin-top: 2px; }
+
+    /* 上传弹窗 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px 32px;
+      width: 440px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.18);
+    }
+    .modal h3 { font-size: 17px; color: #1d3b6c; margin-bottom: 12px; }
+    .modal p { font-size: 13px; color: #5a6872; margin-bottom: 16px; line-height: 1.6; }
+    .modal .step-label { font-weight: 600; font-size: 14px; color: #141414; margin: 16px 0 8px; }
+    .btn-download {
+      display: inline-block;
+      background: #eff6ff;
+      color: #1d3b6c;
+      border: 1px solid #bfdbfe;
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all .2s;
+    }
+    .btn-download:hover { background: #dbeafe; }
+    .upload-area {
+      border: 2px dashed #d9dfe5;
+      border-radius: 8px;
+      padding: 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .upload-area:hover { border-color: #3b82f6; background: #f8faff; }
+    .upload-area .icon { font-size: 28px; margin-bottom: 6px; }
+    .upload-area .text { font-size: 13px; color: #5a6872; }
+    .upload-area .hint { font-size: 11px; color: #8a94a0; margin-top: 4px; }
+    .upload-area input[type="file"] { display: none; }
+    .upload-status { font-size: 12px; margin-top: 8px; text-align: center; }
+    .upload-status.success { color: #22c55e; }
+    .upload-status.error { color: #ef4444; }
+    .modal .btn-close {
+      display: block;
+      width: 100%;
+      margin-top: 18px;
+      padding: 8px;
+      background: #1d3b6c;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* 主容器 */
+    .main-container {
+      max-width: 1340px;
+      margin: 0 auto;
+      padding: 24px 28px;
+    }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: #1d3b6c;
+      margin-bottom: 20px;
+    }
+
+    .content {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    /* 参数面板 */
+    .param-panel {
+      width: 280px;
+      flex-shrink: 0;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      padding: 24px 20px;
+    }
+    .param-panel h3 {
+      font-size: 15px;
+      color: #1d3b6c;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e8ecf1;
+    }
+    .param-group { margin-bottom: 18px; }
+    .param-group label {
+      display: block;
+      font-size: 13px;
+      color: #5a6872;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .param-group select,
+    .param-group input {
+      width: 100%;
+      height: 36px;
+      border: 1px solid #d9dfe5;
+      border-radius: 6px;
+      padding: 0 10px;
+      font-size: 14px;
+      color: #141414;
+      background: #fafbfc;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .param-group select:focus,
+    .param-group input:focus {
+      border-color: #3b82f6;
+      background: #fff;
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .slider-row input[type="range"] {
+      flex: 1;
+      height: 4px;
+      -webkit-appearance: none;
+      background: #d9dfe5;
+      border-radius: 2px;
+      outline: none;
+      padding: 0;
+      border: none;
+    }
+    .slider-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #3b82f6;
+      cursor: pointer;
+    }
+    .slider-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: #3b82f6;
+      min-width: 38px;
+      text-align: right;
+    }
+
+    .btn-run {
+      width: 100%;
+      height: 40px;
+      border: none;
+      border-radius: 6px;
+      background: #3b82f6;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: background .2s, box-shadow .2s;
+    }
+    .btn-run:hover { background: #2563eb; box-shadow: 0 2px 8px rgba(59,130,246,.35); }
+    .btn-run:active { background: #1d4ed8; }
+
+    /* 右侧区域 */
+    .right-area {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* 图表卡片 */
+    .chart-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      padding: 20px 20px 12px;
+    }
+    .chart-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .chart-card h3 {
+      font-size: 15px;
+      color: #1d3b6c;
+      margin-bottom: 0;
+    }
+    .chart-card .chart-card-header + .chart-container { margin-top: 0; }
+    .chart-container { width: 100%; height: 360px; }
+    .chart-container.compare { height: 300px; }
+
+    /* 导出按钮 */
+    .export-btns { display: flex; gap: 6px; }
+    .btn-export {
+      height: 28px;
+      padding: 0 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      border: 1px solid #d9dfe5;
+      background: #fff;
+      color: #5a6872;
+      transition: all .2s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn-export:hover { border-color: #3b82f6; color: #3b82f6; background: #f0f7ff; }
+
+    /* 日期范围 */
+    .date-range-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .date-range-row label { font-size: 12px; color: #5a6872; }
+    .date-range-row input[type="date"] {
+      height: 30px;
+      border: 1px solid #d9dfe5;
+      border-radius: 4px;
+      padding: 0 8px;
+      font-size: 12px;
+      color: #141414;
+      background: #fafbfc;
+      outline: none;
+    }
+    .date-range-row input[type="date"]:focus { border-color: #3b82f6; }
+    .btn-apply {
+      height: 30px;
+      padding: 0 14px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      border: 1px solid #3b82f6;
+      background: #3b82f6;
+      color: #fff;
+      transition: all .2s;
+    }
+    .btn-apply:hover { background: #2563eb; }
+
+    /* 准确率指标 */
+    .accuracy-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .accuracy-tag {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #f0f7ff;
+      border: 1px solid #dbeafe;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: #1d3b6c;
+    }
+    .accuracy-tag .label { color: #8a94a0; }
+    .accuracy-tag .value { font-weight: 700; color: #3b82f6; }
+    .accuracy-tag .value.good { color: #10b981; }
+    .accuracy-tag .value.warn { color: #f59e0b; }
+
+    /* 补货建议卡片 */
+    .replenish-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      padding: 20px 24px;
+    }
+    .replenish-card h3 {
+      font-size: 15px;
+      color: #1d3b6c;
+      margin-bottom: 14px;
+    }
+    .replenish-metrics {
+      display: flex;
+      gap: 32px;
+      margin-bottom: 14px;
+    }
+    .metric-item { display: flex; flex-direction: column; }
+    .metric-label { font-size: 12px; color: #8a94a0; }
+    .metric-value { font-size: 22px; font-weight: 700; color: #1d3b6c; }
+    .metric-value.highlight { color: #3b82f6; }
+    .reason-box {
+      background: #f8fafd;
+      border-left: 3px solid #3b82f6;
+      border-radius: 0 6px 6px 0;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #4a5568;
+      line-height: 1.6;
+      margin-bottom: 14px;
+    }
+    .btn-group { display: flex; gap: 12px; }
+    .btn-accept, .btn-reject {
+      height: 34px;
+      padding: 0 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .2s;
+      border: 1px solid transparent;
+    }
+    .btn-accept {
+      background: #3b82f6;
+      color: #fff;
+    }
+    .btn-accept:hover { background: #2563eb; }
+    .btn-accept.done {
+      background: #dbeafe;
+      color: #3b82f6;
+      border-color: #3b82f6;
+      cursor: default;
+    }
+    .btn-reject {
+      background: #fff;
+      color: #8a94a0;
+      border-color: #d9dfe5;
+    }
+    .btn-reject:hover { background: #f5f6f8; }
+    .btn-reject.done {
+      background: #fef2f2;
+      color: #ef4444;
+      border-color: #ef4444;
+      cursor: default;
+    }
+
+    /* 响应式 */
+    @media (max-width: 900px) {
+      .content { flex-direction: column; }
+      .param-panel { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 导航条 -->
+  <nav class="navbar">
+    <span class="logo">AI供应链决策中枢</span>
+    <div class="nav-right">
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <button class="btn-upload-data" id="btnUploadData" onclick="openUploadModal()">上传销售数据</button>
+        <span class="upload-hint">演示数据，实际场景通过ERP等系统获取</span>
+      </div>
+      <a class="nav-link" href="index.html">返回首页</a>
+    </div>
+  </nav>
+
+  <div class="main-container">
+    <h1 class="page-title">智能需求预测与动态补货</h1>
+
+    <div class="content">
+
+      <!-- 左侧参数面板 -->
+      <div class="param-panel">
+        <h3>参数设置</h3>
+
+        <div class="param-group">
+          <label for="skuSelect">SKU 选择</label>
+          <select id="skuSelect">
+            <option value="SKU-1001">SKU-1001</option>
+            <option value="SKU-1002">SKU-1002</option>
+            <option value="SKU-1003">SKU-1003</option>
+            <option value="SKU-1004">SKU-1004</option>
+            <option value="SKU-1005">SKU-1005</option>
+          </select>
+        </div>
+
+        <div class="param-group">
+          <label>服务水平</label>
+          <div class="slider-row">
+            <input type="range" id="serviceLevel" min="90" max="99" value="95" step="1">
+            <span class="slider-value" id="sliderValue">95%</span>
+          </div>
+        </div>
+
+        <div class="param-group">
+          <label for="leadTime">提前期（周）</label>
+          <input type="number" id="leadTime" value="2" min="1" max="12" step="1">
+        </div>
+
+        <button class="btn-run" id="btnRun">运行预测</button>
+      </div>
+
+      <!-- 右侧 -->
+      <div class="right-area">
+
+        <!-- 预测图表 -->
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3>销量预测</h3>
+            <div class="export-btns">
+              <button class="btn-export" onclick="exportChartImage('chart', '销量预测')">导出图片</button>
+              <button class="btn-export" onclick="exportChartPDF('chart', '销量预测')">导出 PDF</button>
+            </div>
+          </div>
+          <div class="chart-container" id="chart"></div>
+        </div>
+
+        <!-- 预测回看对比 -->
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3>预测回看对比（历史预测 vs 实际销量）</h3>
+            <div class="export-btns">
+              <button class="btn-export" onclick="exportChartImage('chartCompare', '预测回看对比')">导出图片</button>
+              <button class="btn-export" onclick="exportChartPDF('chartCompare', '预测回看对比')">导出 PDF</button>
+            </div>
+          </div>
+          <div class="date-range-row">
+            <label>对比周期：</label>
+            <input type="date" id="dateStart" value="2026-05-18">
+            <span style="font-size:12px;color:#8a94a0;">至</span>
+            <input type="date" id="dateEnd" value="2026-08-09">
+            <button class="btn-apply" id="btnApplyRange">应用</button>
+          </div>
+          <div class="chart-container compare" id="chartCompare"></div>
+          <div class="accuracy-row" id="accuracyRow"></div>
+        </div>
+
+        <!-- 补货建议 -->
+        <div class="replenish-card">
+          <h3>补货建议</h3>
+          <div class="replenish-metrics">
+            <div class="metric-item">
+              <span class="metric-label">安全库存</span>
+              <span class="metric-value highlight" id="safetyStock">--</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-label">建议补货量</span>
+              <span class="metric-value highlight" id="orderQty">--</span>
+            </div>
+          </div>
+          <div class="reason-box" id="reasonBox">点击"运行预测"获取AI补货建议</div>
+          <div class="btn-group">
+            <button class="btn-accept" id="btnAccept">采纳建议</button>
+            <button class="btn-reject" id="btnReject">拒绝</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== 模拟数据 ====================
+    const MOCK_DATA = {
+      historySales: [
+        { week: 'W1',  date: '2026-05-18', value: 142 },
+        { week: 'W2',  date: '2026-05-25', value: 158 },
+        { week: 'W3',  date: '2026-06-01', value: 137 },
+        { week: 'W4',  date: '2026-06-08', value: 165 },
+        { week: 'W5',  date: '2026-06-15', value: 149 },
+        { week: 'W6',  date: '2026-06-22', value: 172 },
+        { week: 'W7',  date: '2026-06-29', value: 160 },
+        { week: 'W8',  date: '2026-07-06', value: 185 },
+        { week: 'W9',  date: '2026-07-13', value: 178 },
+        { week: 'W10', date: '2026-07-20', value: 193 },
+        { week: 'W11', date: '2026-07-27', value: 181 },
+        { week: 'W12', date: '2026-08-03', value: 197 },
+      ],
+      // 历史预测值：模型在对应周之前对当周的预测（用于回看评估准确率）
+      historicalForecast: [
+        { week: 'W1',  date: '2026-05-18', value: 135 },
+        { week: 'W2',  date: '2026-05-25', value: 150 },
+        { week: 'W3',  date: '2026-06-01', value: 145 },
+        { week: 'W4',  date: '2026-06-08', value: 159 },
+        { week: 'W5',  date: '2026-06-15', value: 155 },
+        { week: 'W6',  date: '2026-06-22', value: 165 },
+        { week: 'W7',  date: '2026-06-29', value: 168 },
+        { week: 'W8',  date: '2026-07-06', value: 178 },
+        { week: 'W9',  date: '2026-07-13', value: 185 },
+        { week: 'W10', date: '2026-07-20', value: 188 },
+        { week: 'W11', date: '2026-07-27', value: 190 },
+        { week: 'W12', date: '2026-08-03', value: 191 },
+      ],
+      forecast: [
+        { week: 'W13', date: '2026-08-10', value: 210, lower: 195, upper: 228 },
+        { week: 'W14', date: '2026-08-17', value: 218, lower: 199, upper: 240 },
+        { week: 'W15', date: '2026-08-24', value: 225, lower: 202, upper: 251 },
+        { week: 'W16', date: '2026-08-31', value: 231, lower: 206, upper: 260 },
+      ],
+      safetyStock: 189,
+      recommendedOrderQty: 356,
+      reason: '基于近12周销量呈稳步上升趋势（周均增长约2.1%），结合95%服务水平与2周提前期，建议补货356件。该数量覆盖预测期内的需求均值+安全库存缓冲，可有效应对需求波动，缺货风险控制在5%以内。'
+    };
+
+    // ==================== Coze 工作流配置 ====================
+    const COZE_CONFIG = {
+      token: 'pat_P06f8diTWug4bZdNrvtSWcuIhkyhQkAI8VHZDvdzXTptrCUXGtLG5OdBuSmHr7eg',
+      workflowId: '7673805163991646235',
+      apiUrl: 'https://api.coze.cn/v1/workflow/run',
+    };
+
+    // ==================== 上传数据管理 ====================
+    let uploadedData = null; // { sku_id: [{ week, date, value }, ...] }
+
+    function openUploadModal() {
+      document.getElementById('modalOverlay').classList.add('show');
+      document.getElementById('uploadStatus').textContent = '';
+      document.getElementById('uploadStatus').className = 'upload-status';
+    }
+
+    function closeUploadModal() {
+      document.getElementById('modalOverlay').classList.remove('show');
+    }
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      const status = document.getElementById('uploadStatus');
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          const wb = XLSX.read(e.target.result, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+          if (rows.length < 2) throw new Error('文件为空');
+
+          // 解析：第1行是表头 [sku_id, week, sales]
+          const header = rows[0];
+          const skuIdx = header.findIndex(h => String(h).toLowerCase().includes('sku'));
+          const weekIdx = header.findIndex(h => String(h).toLowerCase() === 'week');
+          const salesIdx = header.findIndex(h => String(h).toLowerCase().includes('sales'));
+          if (skuIdx < 0 || weekIdx < 0 || salesIdx < 0) {
+            throw new Error('文件格式不正确，需要包含 sku_id、week、sales 列');
+          }
+
+          const dataMap = {};
+          for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row[skuIdx]) continue;
+            const sku = String(row[skuIdx]).trim();
+            const week = parseInt(row[weekIdx]);
+            const sales = parseInt(row[salesIdx]);
+            if (!dataMap[sku]) dataMap[sku] = [];
+            dataMap[sku].push({ week: 'W' + week, date: null, value: sales });
+          }
+
+          // 为每个SKU生成日期（以当前日期的最近周一为基准回推）
+          const today = new Date();
+          const lastMonday = new Date(today);
+          lastMonday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+
+          for (const sku of Object.keys(dataMap)) {
+            dataMap[sku].sort((a, b) => parseInt(a.week.slice(1)) - parseInt(b.week.slice(1)));
+            dataMap[sku].forEach((item, idx) => {
+              const d = new Date(lastMonday);
+              d.setDate(d.getDate() - (12 - idx) * 7);
+              item.date = d.toISOString().slice(0, 10);
+            });
+          }
+
+          uploadedData = dataMap;
+          const skuCount = Object.keys(dataMap).length;
+          status.textContent = `已成功加载 ${skuCount} 个SKU的销售数据`;
+          status.className = 'upload-status success';
+
+          document.getElementById('btnUploadData').textContent = '已上传';
+          document.getElementById('btnUploadData').classList.add('uploaded');
+
+          // 更新SKU下拉框（如果上传数据中有新的SKU）
+          updateSkuSelect(Object.keys(dataMap));
+
+          console.log('[上传] 已加载数据：', dataMap);
+        } catch (err) {
+          status.textContent = '解析失败：' + err.message;
+          status.className = 'upload-status error';
+          console.error('[上传] 解析错误：', err);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function updateSkuSelect(skuList) {
+      const select = document.getElementById('skuSelect');
+      select.innerHTML = '';
+      skuList.forEach(sku => {
+        const opt = document.createElement('option');
+        opt.value = sku;
+        opt.textContent = sku;
+        select.appendChild(opt);
+      });
+    }
+
+    // 获取当前SKU的历史销售数据（优先使用上传数据，降级为Mock）
+    function getHistorySalesData() {
+      const skuId = document.getElementById('skuSelect').value;
+      if (uploadedData && uploadedData[skuId] && uploadedData[skuId].length >= 3) {
+        return uploadedData[skuId];
+      }
+      return MOCK_DATA.historySales;
+    }
+
+    // ==================== API 函数 ====================
+    async function fetchDemandForecast(params) {
+      // 尝试调用真实 Coze 工作流
+      try {
+        console.log('[Coze] 调用工作流，参数：', params);
+        const response = await fetch(COZE_CONFIG.apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + COZE_CONFIG.token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            workflow_id: COZE_CONFIG.workflowId,
+            parameters: params,
+          }),
+        });
+
+        const result = await response.json();
+        console.log('[Coze] API 原始响应：', result);
+
+        if (result.code === 0 && result.data) {
+          // Coze 工作流返回的 data 可能是 JSON 字符串，需要解析
+          let parsed;
+          try {
+            parsed = typeof result.data === 'string'
+              ? JSON.parse(result.data)
+              : result.data;
+          } catch (e) {
+            // data 不是 JSON，尝试直接使用
+            parsed = result.data;
+          }
+          console.log('[Coze] 解析后数据：', parsed);
+
+          // 验证返回数据是否包含必要字段
+          if (parsed && parsed.reason) {
+            // 从 reason 文本中提取数字（兜底：结束节点未输出代码节点字段时）
+            let safetyStock = parsed.safety_stock;
+            let recommendedOrderQty = parsed.recommended_order_qt;
+            let forecastArr;
+
+            if (parsed.forecast) {
+              // 代码节点字段已输出，直接使用
+              if (typeof parsed.forecast === 'string') {
+                forecastArr = parsed.forecast.split(',').map(Number);
+              } else if (Array.isArray(parsed.forecast)) {
+                forecastArr = parsed.forecast.map(Number);
+              }
+            } else {
+              // 从 reason 文本中提取数值
+              const r = parsed.reason;
+              const totalMatch = r.match(/总需求(\d+)件/);
+              const safetyMatch = r.match(/安全库存(\d+)件/);
+              const orderMatch = r.match(/补货(\d+)件/);
+              const invMatch = r.match(/当前库存(\d+)件/);
+
+              if (safetyStock === undefined) safetyStock = safetyMatch ? parseInt(safetyMatch[1]) : 0;
+              if (recommendedOrderQty === undefined) recommendedOrderQty = orderMatch ? parseInt(orderMatch[1]) : 0;
+
+              // 按 2% 递增拆分总需求为 4 周预测
+              const total = totalMatch ? parseInt(totalMatch[1]) : 0;
+              if (total > 0) {
+                const ratio = [1.02, 1.0404, 1.061208, 1.08243216];
+                const sumRatio = ratio.reduce((a, b) => a + b, 0);
+                forecastArr = ratio.map(r => Math.round(total * r / sumRatio));
+              }
+            }
+            forecastArr = forecastArr || [0, 0, 0, 0];
+
+            // 构建 forecast 对象数组（W13~W16，日期递增）
+            const baseDate = new Date(getHistorySalesData()[getHistorySalesData().length - 1].date);
+            const forecast = forecastArr.map((v, i) => {
+              const d = new Date(baseDate);
+              d.setDate(d.getDate() + 7 * (i + 1));
+              const ds = d.toISOString().slice(0, 10);
+              return {
+                week: 'W' + (13 + i),
+                date: ds,
+                value: v,
+                lower: Math.round(v * 0.9),
+                upper: Math.round(v * 1.12),
+              };
+            });
+
+            return {
+              forecast,
+              historicalForecast: MOCK_DATA.historicalForecast,
+              accuracy: calcAccuracyDefault(),
+              safetyStock: safetyStock || 0,
+              recommendedOrderQty: recommendedOrderQty || 0,
+              reason: parsed.reason || '模型预测完成，请查看结果。',
+            };
+          }
+          console.warn('[Coze] 返回数据缺少必要字段，降级为 Mock 数据');
+        } else {
+          console.warn('[Coze] API 返回异常，code:', result.code, 'msg:', result.msg);
+        }
+      } catch (err) {
+        console.warn('[Coze] API 调用失败，降级为 Mock 数据：', err.message);
+      }
+
+      // ====== 降级：使用 Mock 数据 ======
+      console.log('[Mock] 使用模拟数据');
+      await new Promise(resolve => setTimeout(resolve, 600));
+
+      const sl = params.service_level / 100;
+      const lt = params.lead_time_weeks;
+      const base = MOCK_DATA;
+
+      return {
+        forecast: base.forecast.map(f => ({
+          ...f,
+          value: Math.round(f.value * (1 + (lt - 2) * 0.02)),
+          lower: Math.round(f.lower * (1 + (lt - 2) * 0.02)),
+          upper: Math.round(f.upper * (1 + (lt - 2) * 0.02)),
+        })),
+        historicalForecast: base.historicalForecast,
+        accuracy: calcAccuracyDefault(),
+        safetyStock: Math.round(base.safetyStock * sl * (1 + (lt - 2) * 0.15)),
+        recommendedOrderQty: Math.round(base.recommendedOrderQty * (1 + (lt - 2) * 0.1)),
+        reason: base.reason,
+      };
+    }
+
+    function calcAccuracyDefault() {
+      const base = MOCK_DATA;
+      const errors = base.historySales.map((s, i) => Math.abs(s.value - base.historicalForecast[i].value));
+      const mae = Math.round(errors.reduce((a, b) => a + b, 0) / errors.length);
+      const ape = base.historySales.map((s, i) => Math.abs(s.value - base.historicalForecast[i].value) / s.value);
+      const mape = parseFloat((ape.reduce((a, b) => a + b, 0) / ape.length * 100).toFixed(1));
+      return { mape, mae };
+    }
+
+    // ==================== 图表初始化 ====================
+    const chartDom = document.getElementById('chart');
+    const myChart = echarts.init(chartDom);
+    const compareDom = document.getElementById('chartCompare');
+    const compareChart = echarts.init(compareDom);
+    let feedbackRecorded = false;
+
+    function renderChart(historySales, forecast) {
+      const weeks = [
+        ...historySales.map(h => h.week),
+        ...forecast.map(f => f.week),
+      ];
+      const actualValues = [...historySales.map(h => h.value), ...Array(forecast.length).fill(null)];
+      const forecastValues = [...Array(historySales.length).fill(null), ...forecast.map(f => f.value)];
+      const lowerBounds = [...Array(historySales.length).fill(null), ...forecast.map(f => f.lower)];
+      const upperBounds = [...Array(historySales.length).fill(null), ...forecast.map(f => f.upper)];
+
+      const option = {
+        tooltip: {
+          trigger: 'axis',
+          formatter(params) {
+            const items = params.filter(p => p.value != null);
+            return items.map(p => {
+              if (p.seriesName === '置信区间') {
+                return `${p.seriesName}：${p.data[1]} - ${p.data[2]}`;
+              }
+              return `${p.seriesName}：${p.value} 件`;
+            }).join('<br/>');
+          },
+        },
+        legend: {
+          data: ['实际销量', '预测销量', '置信区间'],
+          bottom: 0,
+          textStyle: { fontSize: 12, color: '#5a6872' },
+        },
+        grid: { left: 48, right: 28, top: 20, bottom: 36 },
+        xAxis: {
+          type: 'category',
+          data: weeks,
+          axisLine: { lineStyle: { color: '#d9dfe5' } },
+          axisTick: { show: false },
+          axisLabel: { color: '#8a94a0', fontSize: 12 },
+        },
+        yAxis: {
+          type: 'value',
+          name: '件',
+          nameTextStyle: { color: '#8a94a0', fontSize: 12 },
+          axisLabel: { color: '#8a94a0', fontSize: 12 },
+          splitLine: { lineStyle: { color: '#f0f2f5', type: 'dashed' } },
+        },
+        series: [
+          {
+            name: '实际销量',
+            type: 'line',
+            data: actualValues,
+            symbol: 'circle',
+            symbolSize: 6,
+            lineStyle: { color: '#3b82f6', width: 2.5 },
+            itemStyle: { color: '#3b82f6' },
+            connectNulls: false,
+          },
+          {
+            name: '预测销量',
+            type: 'line',
+            data: forecastValues,
+            symbol: 'diamond',
+            symbolSize: 7,
+            lineStyle: { color: '#f59e0b', width: 2.5, type: 'dashed' },
+            itemStyle: { color: '#f59e0b' },
+            connectNulls: false,
+          },
+          {
+            name: '置信区间',
+            type: 'custom',
+            renderItem(params, api) {
+              const ci = api.coord.bind(api);
+              const xValue = api.value(0);
+              const low = api.value(1);
+              const high = api.value(2);
+              if (low == null || high == null) return null;
+              const start = ci([xValue, low]);
+              const end = ci([xValue, high]);
+              const x = start[0];
+              const y = end[1];
+              const w = 28;
+              const h = start[1] - end[1];
+              return {
+                type: 'rect',
+                shape: { x: x - w / 2, y, width: w, height: h },
+                style: { fill: 'rgba(59,130,246,0.12)', stroke: 'none' },
+                z: 0,
+              };
+            },
+            data: forecast.map((f, i) => [historySales.length + i, f.lower, f.upper]),
+            tooltip: { show: true },
+          },
+        ],
+      };
+
+      myChart.setOption(option, true);
+    }
+
+    // 渲染预测回看对比图
+    function renderCompareChart(historySales, historicalForecast) {
+      const weeks = historySales.map(h => h.week);
+      const actualValues = historySales.map(h => h.value);
+      const predictedValues = historicalForecast.map(f => f.value);
+      const diffData = historySales.map((s, i) => s.value - historicalForecast[i].value);
+
+      const option = {
+        tooltip: {
+          trigger: 'axis',
+          formatter(params) {
+            const items = params.filter(p => p.seriesName !== '偏差');
+            const diffItem = params.find(p => p.seriesName === '偏差');
+            let html = items.map(p => `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${p.color};margin-right:6px;"></span>${p.seriesName}：${p.value} 件`).join('<br/>');
+            if (diffItem && diffItem.value != null) {
+              const sign = diffItem.value >= 0 ? '+' : '';
+              html += `<br/><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${diffItem.color};margin-right:6px;"></span>偏差：${sign}${diffItem.value} 件`;
+            }
+            return html;
+          },
+        },
+        legend: {
+          data: ['实际销量', '历史预测', '偏差'],
+          bottom: 0,
+          textStyle: { fontSize: 12, color: '#5a6872' },
+        },
+        grid: { left: 48, right: 48, top: 16, bottom: 36 },
+        xAxis: {
+          type: 'category',
+          data: weeks,
+          axisLine: { lineStyle: { color: '#d9dfe5' } },
+          axisTick: { show: false },
+          axisLabel: { color: '#8a94a0', fontSize: 12 },
+        },
+        yAxis: [
+          {
+            type: 'value',
+            name: '件',
+            nameTextStyle: { color: '#8a94a0', fontSize: 12 },
+            axisLabel: { color: '#8a94a0', fontSize: 12 },
+            splitLine: { lineStyle: { color: '#f0f2f5', type: 'dashed' } },
+          },
+          {
+            type: 'value',
+            name: '偏差(件)',
+            nameTextStyle: { color: '#8a94a0', fontSize: 12 },
+            axisLabel: { color: '#8a94a0', fontSize: 12 },
+            splitLine: { show: false },
+          },
+        ],
+        series: [
+          {
+            name: '实际销量',
+            type: 'bar',
+            data: actualValues,
+            barWidth: 14,
+            itemStyle: { color: '#3b82f6', borderRadius: [4, 4, 0, 0] },
+            yAxisIndex: 0,
+          },
+          {
+            name: '历史预测',
+            type: 'bar',
+            data: predictedValues,
+            barWidth: 14,
+            itemStyle: { color: '#93c5fd', borderRadius: [4, 4, 0, 0] },
+            yAxisIndex: 0,
+          },
+          {
+            name: '偏差',
+            type: 'line',
+            data: diffData,
+            symbol: 'circle',
+            symbolSize: 6,
+            lineStyle: { color: '#ef4444', width: 2, type: 'dashed' },
+            itemStyle: { color: '#ef4444' },
+            yAxisIndex: 1,
+          },
+        ],
+      };
+
+      compareChart.resize();
+      compareChart.setOption(option, true);
+    }
+
+    // 更新准确率指标
+    function updateAccuracy(accuracy) {
+      const row = document.getElementById('accuracyRow');
+      const cls = accuracy.mape <= 5 ? 'good' : accuracy.mape <= 10 ? '' : 'warn';
+      row.innerHTML = `
+        <div class="accuracy-tag">
+          <span class="label">MAPE（平均绝对百分比误差）</span>
+          <span class="value ${cls}">${accuracy.mape}%</span>
+        </div>
+        <div class="accuracy-tag">
+          <span class="label">MAE（平均绝对误差）</span>
+          <span class="value ${cls}">${accuracy.mae} 件</span>
+        </div>
+        <div class="accuracy-tag">
+          <span class="label">判定</span>
+          <span class="value ${cls}">${accuracy.mape <= 5 ? '优秀' : accuracy.mape <= 10 ? '良好' : '需优化'}</span>
+        </div>
+      `;
+    }
+
+    // 初始空图表
+    renderChart([], []);
+
+    // 响应式
+    window.addEventListener('resize', () => { myChart.resize(); compareChart.resize(); });
+
+    // ==================== 交互逻辑 ====================
+    const slider = document.getElementById('serviceLevel');
+    const sliderVal = document.getElementById('sliderValue');
+    slider.addEventListener('input', () => {
+      sliderVal.textContent = slider.value + '%';
+    });
+
+    function resetFeedback() {
+      feedbackRecorded = false;
+      const accept = document.getElementById('btnAccept');
+      const reject = document.getElementById('btnReject');
+      accept.className = 'btn-accept';
+      accept.textContent = '采纳建议';
+      accept.disabled = false;
+      reject.className = 'btn-reject';
+      reject.textContent = '拒绝';
+      reject.disabled = false;
+    }
+
+    document.getElementById('btnRun').addEventListener('click', async () => {
+      const btn = document.getElementById('btnRun');
+      btn.textContent = '预测中...';
+      btn.disabled = true;
+
+      const currentHistory = getHistorySalesData();
+      const params = {
+        sku_id: String(document.getElementById('skuSelect').value),
+        history_sales: currentHistory.map(s => s.value),
+        service_level: Number(slider.value),
+        lead_time_weeks: Number(document.getElementById('leadTime').value),
+      };
+
+      try {
+        const data = await fetchDemandForecast(params);
+
+        // 更新图表
+        renderChart(currentHistory, data.forecast);
+
+        // 更新预测回看对比
+        renderCompareChart(currentHistory, data.historicalForecast);
+        updateAccuracy(data.accuracy);
+
+        // 更新补货建议
+        document.getElementById('safetyStock').textContent = data.safetyStock + ' 件';
+        document.getElementById('orderQty').textContent = data.recommendedOrderQty + ' 件';
+        document.getElementById('reasonBox').textContent = data.reason;
+
+        // 重置反馈按钮
+        resetFeedback();
+      } catch (err) {
+        console.error('预测请求失败：', err);
+        document.getElementById('reasonBox').textContent = '预测失败，请稍后重试。';
+      } finally {
+        btn.textContent = '运行预测';
+        btn.disabled = false;
+      }
+    });
+
+    // 采纳
+    document.getElementById('btnAccept').addEventListener('click', () => {
+      if (feedbackRecorded) return;
+      feedbackRecorded = true;
+      const btn = document.getElementById('btnAccept');
+      btn.className = 'btn-accept done';
+      btn.textContent = '已采纳';
+      btn.disabled = true;
+      document.getElementById('btnReject').className = 'btn-reject';
+      document.getElementById('btnReject').disabled = true;
+      console.log('[反馈] 采纳建议', {
+        sku: document.getElementById('skuSelect').value,
+        safetyStock: document.getElementById('safetyStock').textContent,
+        orderQty: document.getElementById('orderQty').textContent,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    // 拒绝
+    document.getElementById('btnReject').addEventListener('click', () => {
+      if (feedbackRecorded) return;
+      feedbackRecorded = true;
+      const btn = document.getElementById('btnReject');
+      btn.className = 'btn-reject done';
+      btn.textContent = '已拒绝';
+      btn.disabled = true;
+      document.getElementById('btnAccept').className = 'btn-accept';
+      document.getElementById('btnAccept').disabled = true;
+      console.log('[反馈] 拒绝建议', {
+        sku: document.getElementById('skuSelect').value,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    // ==================== 导出功能 ====================
+    // 导出为 PNG 图片
+    function exportChartImage(chartId, fileName) {
+      const chart = chartId === 'chart' ? myChart : compareChart;
+      const url = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+      const link = document.createElement('a');
+      link.download = `${fileName}_${new Date().toISOString().slice(0, 10)}.png`;
+      link.href = url;
+      link.click();
+    }
+
+    // 导出为 PDF
+    function exportChartPDF(chartId, fileName) {
+      const chart = chartId === 'chart' ? myChart : compareChart;
+      const url = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('landscape', 'mm', 'a4');
+      const img = new Image();
+      img.onload = () => {
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const ratio = img.width / img.height;
+        let w = pageW - 20;
+        let h = w / ratio;
+        if (h > pageH - 20) { h = pageH - 20; w = h * ratio; }
+        pdf.addImage(img, 'PNG', (pageW - w) / 2, 10, w, h);
+        pdf.save(`${fileName}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      };
+      img.src = url;
+    }
+
+    // ==================== 日期范围筛选 ====================
+
+    // 过滤数据（日期字符串直接比较，避免时区问题）
+    function filterByDateRange(historySales, historicalForecast, dateStart, dateEnd) {
+      const filteredSales = [];
+      const filteredForecast = [];
+      for (let i = 0; i < historySales.length; i++) {
+        if (historySales[i].date >= dateStart && historySales[i].date <= dateEnd) {
+          filteredSales.push(historySales[i]);
+          filteredForecast.push(historicalForecast[i]);
+        }
+      }
+      return { historySales: filteredSales, historicalForecast: filteredForecast };
+    }
+
+    // 重新计算筛选后的准确率
+    function calcAccuracy(historySales, historicalForecast) {
+      if (historySales.length === 0) return { mape: 0, mae: 0 };
+      const errors = historySales.map((s, i) => historySales[i] && historicalForecast[i]
+        ? Math.abs(s.value - historicalForecast[i].value) : 0);
+      const mae = Math.round(errors.reduce((a, b) => a + b, 0) / errors.length);
+      const ape = historySales.map((s, i) => historicalForecast[i]
+        ? Math.abs(s.value - historicalForecast[i].value) / s.value : 0);
+      const mape = parseFloat((ape.reduce((a, b) => a + b, 0) / ape.length * 100).toFixed(1));
+      return { mape, mae };
+    }
+
+    // 应用日期范围
+    document.getElementById('btnApplyRange').addEventListener('click', () => {
+      const dateStart = document.getElementById('dateStart').value;
+      const dateEnd = document.getElementById('dateEnd').value;
+      console.log('[日期筛选] 点击应用，范围：', dateStart, '~', dateEnd);
+      if (!dateStart || !dateEnd) {
+        console.warn('[日期筛选] 日期为空，跳过');
+        return;
+      }
+
+      const currentHistory = getHistorySalesData();
+      const filtered = filterByDateRange(currentHistory, MOCK_DATA.historicalForecast, dateStart, dateEnd);
+      console.log('[日期筛选] 筛选结果：', filtered.historySales.length, '条数据');
+
+      if (filtered.historySales.length === 0) {
+        alert('所选日期范围内无数据，请调整范围。');
+        return;
+      }
+
+      try {
+        renderCompareChart(filtered.historySales, filtered.historicalForecast);
+        console.log('[日期筛选] 图表已更新');
+        const acc = calcAccuracy(filtered.historySales, filtered.historicalForecast);
+        updateAccuracy(acc);
+        console.log('[日期筛选] 准确率已更新', acc);
+      } catch (e) {
+        console.error('[日期筛选] 渲染失败：', e);
+        alert('图表渲染失败：' + e.message);
+      }
+    });
+
+    // 运行预测时同步更新日期选择器为全范围
+    document.getElementById('btnRun').addEventListener('click', () => {
+      const h = getHistorySalesData();
+      const allDates = h.map(s => s.date);
+      document.getElementById('dateStart').value = allDates[0];
+      document.getElementById('dateEnd').value = allDates[allDates.length - 1];
+    });
+  </script>
+
+  <!-- 上传弹窗 -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <h3>上传销售数据</h3>
+      <p>请先下载模板文件，填入各SKU的12周销售数据后上传，系统将依据真实数据进行预测。</p>
+
+      <div class="step-label">步骤一：下载模板</div>
+      <a class="btn-download" href="SKU销售周报_12周.xlsx" download>下载模板文件 (.xlsx)</a>
+
+      <div class="step-label">步骤二：上传填好的文件</div>
+      <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+        <div class="icon">📁</div>
+        <div class="text">点击选择文件或拖拽到此处</div>
+        <div class="hint">支持 .xlsx / .xls 格式</div>
+        <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFileUpload(event)">
+      </div>
+      <div class="upload-status" id="uploadStatus"></div>
+
+      <button class="btn-close" onclick="closeUploadModal()">关闭</button>
+    </div>
+  </div>
+</body>
+</html>
